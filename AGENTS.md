@@ -21,7 +21,7 @@ java -jar renderer/target/cyber-renderer-1.0-jar-with-dependencies.jar capture.c
 
 ## Gotchas
 
-- CI (`.github/workflows/build.yml`) runs `./gradlew build` at repo root, but the Gradle wrapper lives in `mod/` — CI is broken since the project moved out of the repo root.
+- CI (`.github/workflows/build.yml`) has two path-gated jobs driven by a `changes` filter job: `mod` builds via Gradle with `working-directory: mod`, `renderer` builds via Maven in `renderer/`. Editing the workflow file itself triggers both jobs.
 - The built jar is `modid-1.0.0.jar`, not `cyber-capture`: `settings.gradle` sets `rootProject.name = 'modid'` and `archives_base_name` in `gradle.properties` is never referenced by `build.gradle`.
 - Unused template leftovers: `mod/src/main/resources/modid.mixins.json` (points at nonexistent `com.example.mixin`) and `assets/modid/icon.png`. The real mixin config is `recordable.mixins.json`.
 - Renderer speed factor is hardcoded as `20 / tickRate`; output is forced to 60 FPS with libx264.
