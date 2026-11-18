@@ -1,0 +1,44 @@
+superpowers:
+  magneto:
+    enabled: true
+    price: 5000
+    description: "Hover/levitate 5 blocks above ground"
+  firey:
+    enabled: true
+    price: 8000
+    description: "Shoot fireballs with 5s cooldown"
+  frozen:
+    enabled: true
+    price: 6000
+    description: "Freeze players in radius"
+    radius: 10
+    duration: 3
+  arise:
+    enabled: true
+    price: 15000
+    description: "Summon 20 undead mobs"
+    mob-count: 20
+    enchanted-count: 7
+    armor-tier: NETHERITE
+  flash:
+    enabled: true
+    price: 4000
+    description: "Speed amplifier 19 for 30s"
+  hulk:
+    enabled: true
+    price: 7000
+    description: "Jump Boost V + Strength II + Fall damage immunity"
+    duration: 30
+
+cooldowns:
+  default: 1800
+  fireball: 5
+
+messages:
+  purchase-success: "&aYou purchased &6{superpower}&a! Use your Superpower diamond to activate."
+  purchase-no-money: "&cYou don't have enough money! &7Price: &6{price}"
+  already-owned: "&cYou already own a superpower! Use /superpower dismiss to remove it."
+  cooldown-remaining: "&cYou are on cooldown for &6{time}&c. Try again later."
+  no-superpower: "&cYou don't own a superpower!"
+  dismiss-success: "&aYour superpower has been dismissed."
+  activate-success: "&aYour superpower &6{superpower}&a is now active!"

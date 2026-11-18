@@ -1,0 +1,49 @@
+name: Build and Deploy SuperpowerPlugin
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v3
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: SuperpowerPlugin Latest
+          files: |
+            build/libs/SuperpowerPlugin-1.0.0.jar
+          overwrite: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: SFTP Deploy
+        if: secrets.SFTP_HOST != ''
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SFTP_HOST }}
+          username: ${{ secrets.SFTP_USER }}
+          password: ${{ secrets.SFTP_PASS }}
+          port: ${{ secrets.SFTP_PORT || 22 }}
+          target: ${{ secrets.SFTP_TARGET_DIR || /plugins }}
+          file: build/libs/SuperpowerPlugin-1.0.0.jar
+        continue-on-error: true

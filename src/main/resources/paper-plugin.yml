@@ -1,0 +1,13 @@
+name: SuperpowerPlugin
+main: com.bushsmp.superpower.SuperpowerPlugin
+version: 1.0.0
+api-version: 1.21
+
+depend:
+    - Vault
+
+softdepend:
+    - EssentialsX
+
+author: bushsmp
+description: Superpower plugin for Spigot/Purpur
