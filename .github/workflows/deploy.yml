@@ -24,6 +24,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.0.0'
 
       - name: Build Plugin JAR
         run: gradle build
@@ -38,6 +40,7 @@ jobs:
       - name: Deploy JAR to Purpur Server via SFTP
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_TARGET_DIR: ${{ secrets.SFTP_TARGET_DIR }}
         if: ${{ env.SFTP_HOST != '' }}
         continue-on-error: true
         uses: appleboy/scp-action@v0.1.7
@@ -47,5 +50,5 @@ jobs:
           password: ${{ secrets.SFTP_PASS }}
           port: ${{ secrets.SFTP_PORT || '22' }}
           source: "build/libs/SuperpowerPlugin.jar"
-          target: ${{ secrets.SFTP_TARGET_DIR || '/plugins' }}
+          target: ${{ env.SFTP_TARGET_DIR || '/plugins' }}
           strip_components: 2
