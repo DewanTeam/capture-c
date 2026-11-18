@@ -33,10 +33,12 @@ jobs:
         with:
           tag_name: latest
           name: Latest Build
-          files: build/libs/SuperpowerPlugin-*.jar
+          files: build/libs/SuperpowerPlugin.jar
 
       - name: Deploy JAR to Purpur Server via SFTP
-        if: ${{ secrets.SFTP_HOST != '' }}
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+        if: ${{ env.SFTP_HOST != '' }}
         continue-on-error: true
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -44,6 +46,6 @@ jobs:
           username: ${{ secrets.SFTP_USER }}
           password: ${{ secrets.SFTP_PASS }}
           port: ${{ secrets.SFTP_PORT || '22' }}
-          source: "build/libs/SuperpowerPlugin-*.jar"
+          source: "build/libs/SuperpowerPlugin.jar"
           target: ${{ secrets.SFTP_TARGET_DIR || '/plugins' }}
           strip_components: 2
