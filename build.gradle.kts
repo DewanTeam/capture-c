@@ -26,3 +26,7 @@ dependencies {
         exclude(group = "org.bukkit")
     }
 }
+
+tasks.named<Jar>("jar") {
+    archiveFileName.set("SuperpowerPlugin.jar")
+}
