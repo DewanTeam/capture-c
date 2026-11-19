@@ -1,13 +1,15 @@
 name: SuperpowerPlugin
+version: '1.0.0'
 main: com.bushsmp.superpower.SuperpowerPlugin
-version: 1.0.0
-api-version: 1.21
-
-depend:
-    - Vault
-
-softdepend:
-    - EssentialsX
-
-author: bushsmp
-description: Superpower plugin for Spigot/Purpur
+api-version: '1.21'
+description: Superpower plugin for Purpur with Paper Dialog UI and Vault economy
+dependencies:
+  server:
+    Vault:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    Essentials:
+      load: BEFORE
+      required: false
+      join-classpath: true
