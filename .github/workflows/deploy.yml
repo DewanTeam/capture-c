@@ -40,15 +40,21 @@ jobs:
       - name: Deploy JAR to Purpur Server via SFTP
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PASS: ${{ secrets.SFTP_PASS }}
           SFTP_TARGET_DIR: ${{ secrets.SFTP_TARGET_DIR }}
         if: ${{ env.SFTP_HOST != '' }}
         continue-on-error: true
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.SFTP_HOST }}
-          username: ${{ secrets.SFTP_USER }}
-          password: ${{ secrets.SFTP_PASS }}
-          port: ${{ secrets.SFTP_PORT || '22' }}
-          source: "build/libs/SuperpowerPlugin.jar"
-          target: ${{ env.SFTP_TARGET_DIR || '/plugins' }}
-          strip_components: 2
+        run: |
+          sudo apt-get update && sudo apt-get install -y lftp
+          PORT="${SFTP_PORT:-22}"
+          TARGET="${SFTP_TARGET_DIR:-/plugins}"
+          lftp -u "$SFTP_USER","$SFTP_PASS" -p "$PORT" sftp://"$SFTP_HOST" -e "
+            set sftp:auto-confirm yes;
+            set ssl:verify-certificate no;
+            mkdir -p $TARGET;
+            cd $TARGET;
+            put build/libs/SuperpowerPlugin.jar -o SuperpowerPlugin.jar;
+            bye
+          "
