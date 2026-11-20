@@ -1,0 +1,55 @@
+name: CI Build
+
+on:
+  push:
+    branches:
+      - feature/superpower-plugin
+  pull_request:
+    branches:
+      - main
+      - feature/superpower-plugin
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.0.0'
+
+      - name: Show toolchain versions
+        run: |
+          java -version
+          javac -version
+          gradle --version
+
+      - name: Build
+        run: gradle --no-daemon clean build
+
+      - name: Upload plugin JAR
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuperpowerPlugin
+          path: build/libs/SuperpowerPlugin.jar
+          if-no-files-found: error
+          retention-days: 14
