@@ -25,6 +25,7 @@ dependencies {
     compileOnly("com.github.MilkBowl:VaultAPI:1.7.1") {
         exclude(group = "org.bukkit")
     }
+    compileOnly("com.github.CommandAPI:CommandAPI:9.0.0-R0.1-SNAPSHOT")
 }
 
 tasks.named<Jar>("jar") {

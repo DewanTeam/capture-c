@@ -30,6 +30,20 @@ superpowers:
     description: "Jump Boost V + Strength II + Fall damage immunity"
     duration: 30
 
+ranks:
+  veteran:
+    name: "&eVeteran"
+    price: 5000
+    permission: "superpower.rank.veteran"
+  elite:
+    name: "&6Elite"
+    price: 10000
+    permission: "superpower.rank.elite"
+  legend:
+    name: "&cLegend"
+    price: 25000
+    permission: "superpower.rank.legend"
+
 cooldowns:
   default: 1800
   fireball: 5

@@ -82,4 +82,20 @@ public class ConfigManager {
     public long getFireballCooldown() {
         return config.getLong("cooldowns.fireball", 5);
     }
+
+    public String getRankName(String rankId) {
+        return config.getString("ranks." + rankId + ".name", "");
+    }
+
+    public int getRankPrice(String rankId) {
+        return config.getInt("ranks." + rankId + ".price", 0);
+    }
+
+    public String getRankPermission(String rankId) {
+        return config.getString("ranks." + rankId + ".permission", "");
+    }
+
+    public boolean isRankEnabled(String rankId) {
+        return config.getBoolean("ranks." + rankId + ".enabled", true);
+    }
 }
