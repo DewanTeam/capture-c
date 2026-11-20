@@ -2,10 +2,18 @@ name: SuperpowerPlugin
 version: '1.0.0'
 main: com.bushsmp.superpower.SuperpowerPlugin
 api-version: '1.21'
-description: Superpower plugin for Purpur with Paper Dialog UI and Vault economy
+description: Superpower, rank shop and gifting plugin for Purpur/Paper.
 dependencies:
   server:
     Vault:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    LuckPerms:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    CommandAPI:
       load: BEFORE
       required: true
       join-classpath: true
@@ -13,7 +21,7 @@ dependencies:
       load: BEFORE
       required: false
       join-classpath: true
-    CommandAPI:
+    DialogEngine:
       load: BEFORE
-      required: true
+      required: false
       join-classpath: true
