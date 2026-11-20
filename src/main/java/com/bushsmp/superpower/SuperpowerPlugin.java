@@ -2,6 +2,7 @@ package com.bushsmp.superpower;
 
 import dev.jorel.commandapi.CommandAPICommand;
 import dev.jorel.commandapi.arguments.StringArgument;
+import dev.jorel.commandapi.executors.CommandArguments;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.model.user.User;
 import net.luckperms.api.node.NodeType;
@@ -266,23 +267,23 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
 
     private void registerCommands() {
         new CommandAPICommand("superpower")
-                .executesPlayer((player, args) -> {
+                .executesPlayer((Player player, CommandArguments args) -> {
                     if (!openDialog(player, "superpower:launcher")) showSuperpowerHelp(player);
                 })
                 .withSubcommand(new CommandAPICommand("shop")
-                        .executesPlayer((player, args) -> {
+                        .executesPlayer((Player player, CommandArguments args) -> {
                             if (!openDialog(player, "superpower:power_shop")) showPowerShop(player);
                         }))
                 .withSubcommand(new CommandAPICommand("buy")
                         .withArguments(new StringArgument("power_id"))
-                        .executesPlayer((player, args) -> buyPower(player, (String) args.get("power_id"))))
+                        .executesPlayer((Player player, CommandArguments args) -> buyPower(player, (String) args.get("power_id"))))
                 .withSubcommand(new CommandAPICommand("dismiss")
-                        .executesPlayer((player, args) -> dismissPower(player)))
+                        .executesPlayer((Player player, CommandArguments args) -> dismissPower(player)))
                 .withSubcommand(new CommandAPICommand("item")
-                        .executesPlayer((player, args) -> giveActivator(player)))
+                        .executesPlayer((Player player, CommandArguments args) -> giveActivator(player)))
                 .withSubcommand(new CommandAPICommand("giveitem")
                         .withArguments(new StringArgument("recipient"))
-                        .executesPlayer((player, args) -> {
+                        .executesPlayer((Player player, CommandArguments args) -> {
                             if (!isAdmin(player)) {
                                 player.sendMessage(color("&cYou do not have permission to give activators."));
                                 return;
@@ -298,15 +299,15 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
                 .register();
 
         new CommandAPICommand("rankshop")
-                .executesPlayer((player, args) -> {
+                .executesPlayer((Player player, CommandArguments args) -> {
                     if (!openDialog(player, "superpower:rankshop")) showRankShop(player);
                 })
                 .withSubcommand(new CommandAPICommand("buy")
                         .withArguments(new StringArgument("rank_id"))
-                        .executesPlayer((player, args) -> rankService.purchase(player, (String) args.get("rank_id"))))
+                        .executesPlayer((Player player, CommandArguments args) -> rankService.purchase(player, (String) args.get("rank_id"))))
                 .withSubcommand(new CommandAPICommand("gift")
                         .withArguments(new StringArgument("recipient"), new StringArgument("rank_id"))
-                        .executesPlayer((player, args) -> {
+                        .executesPlayer((Player player, CommandArguments args) -> {
                             Player recipient = Bukkit.getPlayerExact((String) args.get("recipient"));
                             if (recipient == null) {
                                 player.sendMessage(color("&cThe recipient must be online to receive a rank gift right now."));
@@ -315,7 +316,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
                             rankService.gift(player, recipient, (String) args.get("rank_id"));
                         }))
                 .withSubcommand(new CommandAPICommand("benefits")
-                        .executesPlayer((player, args) -> showRankBenefits(player)))
+                        .executesPlayer((Player player, CommandArguments args) -> showRankBenefits(player)))
                 .register();
     }
 
