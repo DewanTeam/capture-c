@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
-/** Reads the configurable power and rank catalogue. */
+/** Reads the plugin's configurable power and rank catalogue. */
 public final class ConfigManager {
     private final JavaPlugin plugin;
 
@@ -112,6 +112,10 @@ public final class ConfigManager {
         return plugin.getConfig().getString("ranks." + rankId + ".group", "").trim();
     }
 
+    public String getRankPermission(String rankId) {
+        return plugin.getConfig().getString("ranks." + rankId + ".permission", "").trim();
+    }
+
     public double getRankPrice(String rankId) {
         return plugin.getConfig().getDouble("ranks." + rankId + ".price", -1.0D);
     }
@@ -138,6 +142,13 @@ public final class ConfigManager {
             if (getRankGroup(rankId).equalsIgnoreCase(groupName)) return getRankOrder(rankId);
         }
         return -1;
+    }
+
+    public List<String> getRankIdsByGroup(String groupName) {
+        if (groupName == null || groupName.isBlank()) return List.of();
+        return getRankIds().stream()
+                .filter(rankId -> getRankGroup(rankId).equalsIgnoreCase(groupName))
+                .toList();
     }
 
     private static String titleCase(String value) {
