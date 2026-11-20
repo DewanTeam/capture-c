@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/superpower-plugin
+      - chore/finish-superpower-implementation
   pull_request:
     branches:
       - main
