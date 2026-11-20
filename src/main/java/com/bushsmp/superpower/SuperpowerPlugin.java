@@ -4,7 +4,6 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.entity.Player;
@@ -18,16 +17,16 @@ import org.bukkit.plugin.RegisteredServiceProvider;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.Key;
-import java.util.concurrent.TimeUnit;
 
 public class SuperpowerPlugin extends JavaPlugin implements Listener {
 
     private Economy economy;
-    private Map<String, String> playerSuperpowers = new ConcurrentHashMap<>();
-    private Map<String, Long> playerCooldowns = new ConcurrentHashMap<>();
+    private Map<UUID, String> playerSuperpowers = new ConcurrentHashMap<>();
+    private Map<UUID, Long> playerCooldowns = new ConcurrentHashMap<>();
+    private Map<UUID, String> playerRanks = new ConcurrentHashMap<>();
     private ConfigManager configManager;
     private MessageManager messageManager;
 
@@ -53,16 +52,17 @@ public class SuperpowerPlugin extends JavaPlugin implements Listener {
                 player.sendMessage("&cYou don't have permission to use superpowers!");
                 return;
             }
-            String current = plugin.getPlayerSuperpower(player.getName());
+            UUID uuid = player.getUniqueId();
+            String current = playerSuperpowers.get(uuid);
             if (current != null) {
                 player.sendMessage("&aYour current superpower: &6" + current);
                 player.sendMessage("&7Use your Superpower diamond to activate it, or use /superpower dismiss to remove it.");
             } else {
                 player.sendMessage("&cYou don't own a superpower! Use /superpower buy to purchase one.");
             }
-        }, "buy", "dismiss", "info", getPlugin());
+        }, "buy", "dismiss", "info", this);
 
-        // Subcommand: buy
+        // Subcommand: buy - list ranks without purchasing automatically
         CommandAPI.register("superpower buy", player -> {
             if (!player.hasPermission("superpower.rank.buy")) {
                 player.sendMessage("&cYou don't have permission to buy ranks!");
@@ -73,17 +73,11 @@ public class SuperpowerPlugin extends JavaPlugin implements Listener {
                 if (configManager.isRankEnabled(rankId)) {
                     int price = configManager.getRankPrice(rankId);
                     String name = configManager.getRankName(rankId);
-                    player.sendMessage("&6/" + "superpower buy " + rankId + " &7- &e" + name + " &7- &e" + price + "&7 coins");
+                    player.sendMessage("&6/superpower buy " + rankId + " &7- &e" + name + " &7- &e" + price + "&7 coins");
                 }
             }
-            // Try to buy the first available rank as demo
-            for (String rankId : new String[]{"veteran", "elite", "legend"}) {
-                if (configManager.isRankEnabled(rankId)) {
-                    giveRank(player, rankId);
-                    break;
-                }
-            }
-        }, getPlugin());
+            player.sendMessage("&7Use &6/superpower buy &7<rank> &7to purchase a rank explicitly.");
+        }, this);
 
         // Subcommand: gift
         CommandAPI.register("superpower gift", player -> {
@@ -93,7 +87,7 @@ public class SuperpowerPlugin extends JavaPlugin implements Listener {
             }
             player.sendMessage("&7Usage: &6/superpower gift <player> <rank>");
             player.sendMessage("&7Example: &6/superpower gift &ePlayerName veteran");
-        }, getPlugin());
+        }, this);
 
         // Subcommand: info
         CommandAPI.register("superpower info", player -> {
@@ -110,7 +104,7 @@ public class SuperpowerPlugin extends JavaPlugin implements Listener {
                     player.sendMessage("&6" + rankId + "&7: &e" + name + " &7- &e" + price + "&7 coins &7(" + perm + "&7)");
                 }
             }
-        }, getPlugin());
+        }, this);
 
         getLogger().info("SuperpowerPlugin enabled!");
     }
@@ -134,61 +128,136 @@ public class SuperpowerPlugin extends JavaPlugin implements Listener {
         return economy;
     }
 
-    public boolean hasPlayerSuperpower(String playerName) {
-        return playerSuperpowers.containsKey(playerName);
+    public boolean hasPlayerSuperpower(UUID uuid) {
+        return playerSuperpowers.containsKey(uuid);
     }
 
-    public String getPlayerSuperpower(String playerName) {
-        return playerSuperpowers.getOrDefault(playerName, null);
+    public String getPlayerSuperpower(UUID uuid) {
+        return playerSuperpowers.get(uuid);
     }
 
-    public boolean hasPlayerCooldown(String playerName) {
-        return playerCooldowns.containsKey(playerName);
+    public boolean hasPlayerCooldown(UUID uuid) {
+        return playerCooldowns.containsKey(uuid);
     }
 
-    public long getRemainingCooldown(String playerName) {
-        if (!playerCooldowns.containsKey(playerName)) return 0;
-        long endTime = playerCooldowns.get(playerName);
+    public long getRemainingCooldown(UUID uuid) {
+        if (!playerCooldowns.containsKey(uuid)) return 0;
+        long endTime = playerCooldowns.get(uuid);
         long remaining = endTime - System.currentTimeMillis();
         return Math.max(0, remaining);
     }
 
-    public void setPlayerSuperpower(String playerName, String superpower) {
-        playerSuperpowers.put(playerName, superpower);
+    public void setPlayerSuperpower(UUID uuid, String superpower) {
+        playerSuperpowers.put(uuid, superpower);
         savePlayerData();
     }
 
-    public void setPlayerCooldown(String playerName, long cooldownEndTime) {
-        playerCooldowns.put(playerName, cooldownEndTime);
+    public void setPlayerCooldown(UUID uuid, long cooldownEndTime) {
+        playerCooldowns.put(uuid, cooldownEndTime);
         savePlayerData();
     }
 
-    public void clearPlayerSuperpower(String playerName) {
-        playerSuperpowers.remove(playerName);
+    public void clearPlayerSuperpower(UUID uuid) {
+        playerSuperpowers.remove(uuid);
         savePlayerData();
     }
 
     public void savePlayerData() {
-        // Save player data to players.yml
         File dataFile = new File(getDataFolder(), "players.yml");
-        getLogger().info("Saving player data...");
+        if (!dataFile.exists()) {
+            try {
+                dataFile.createNewFile();
+            } catch (IOException e) {
+                getLogger().severe("Failed to create players.yml");
+                return;
+            }
+        }
+        YamlConfiguration data = YamlConfiguration.loadConfiguration(dataFile);
+
+        // Save superpowers using UUID strings as keys
+        Map<String, String> superpowers = new HashMap<>();
+        for (Map.Entry<UUID, String> entry : playerSuperpowers.entrySet()) {
+            superpowers.put(entry.getKey().toString(), entry.getValue());
+        }
+        data.set("superpowers", superpowers);
+
+        // Save cooldowns using UUID strings as keys
+        Map<String, Long> cooldowns = new HashMap<>();
+        for (Map.Entry<UUID, Long> entry : playerCooldowns.entrySet()) {
+            cooldowns.put(entry.getKey().toString(), entry.getValue());
+        }
+        data.set("cooldowns", cooldowns);
+
+        // Save ranks using UUID strings as keys
+        Map<String, String> ranks = new HashMap<>();
+        for (Map.Entry<UUID, String> entry : playerRanks.entrySet()) {
+            ranks.put(entry.getKey().toString(), entry.getValue());
+        }
+        data.set("ranks", ranks);
+
+        try {
+            data.save(dataFile);
+            getLogger().info("Saved player data for " + playerSuperpowers.size() + " players");
+        } catch (IOException e) {
+            getLogger().severe("Failed to save player data: " + e.getMessage());
+        }
     }
 
-    private void loadPlayerData() {
+    @SuppressWarnings("unchecked")
+    private boolean loadPlayerData() {
         File dataFile = new File(getDataFolder(), "players.yml");
         if (!dataFile.exists()) {
             playerSuperpowers.clear();
             playerCooldowns.clear();
-            return;
+            playerRanks.clear();
+            return false;
         }
-        // Load using YamlConfiguration (same format as config.yml)
+
         YamlConfiguration data = YamlConfiguration.loadConfiguration(dataFile);
-        for (String key : data.getConfigurationSection("superpowers") != null ? data.getConfigurationSection("superpowers").getKeys(false) : new String[0]) {
-            String superpower = data.getString("superpowers." + key);
-            if (superpower != null) {
-                playerSuperpowers.put(key, superpower);
+
+        // Load superpowers
+        Map<String, String> loadedSuperpowers = (Map<String, String>) data.get("superpowers");
+        if (loadedSuperpowers != null) {
+            for (Map.Entry<String, String> entry : loadedSuperpowers.entrySet()) {
+                try {
+                    UUID uuid = UUID.fromString(entry.getKey());
+                    playerSuperpowers.put(uuid, entry.getValue());
+                } catch (IllegalArgumentException ignored) {
+                    // Skip invalid UUIDs
+                }
             }
         }
+
+        // Load cooldowns
+        Map<String, Long> loadedCooldowns = (Map<String, Long>) data.get("cooldowns");
+        if (loadedCooldowns != null) {
+            for (Map.Entry<String, Long> entry : loadedCooldowns.entrySet()) {
+                try {
+                    UUID uuid = UUID.fromString(entry.getKey());
+                    playerCooldowns.put(uuid, entry.getValue());
+                } catch (IllegalArgumentException ignored) {
+                    // Skip invalid UUIDs
+                }
+            }
+        }
+
+        // Load ranks
+        Map<String, String> loadedRanks = (Map<String, String>) data.get("ranks");
+        if (loadedRanks != null) {
+            for (Map.Entry<String, String> entry : loadedRanks.entrySet()) {
+                try {
+                    UUID uuid = UUID.fromString(entry.getKey());
+                    playerRanks.put(uuid, entry.getValue());
+                } catch (IllegalArgumentException ignored) {
+                    // Skip invalid UUIDs
+                }
+            }
+        }
+
+        getLogger().info("Loaded player data for " + playerSuperpowers.size() + " players with superpowers, "
+                + playerCooldowns.size() + " with cooldowns, " + playerRanks.size() + " with ranks");
+        return true;
+    }
         for (String key : data.getConfigurationSection("cooldowns") != null ? data.getConfigurationSection("cooldowns").getKeys(false) : new String[0]) {
             long endTime = data.getLong("cooldowns." + key);
             if (endTime > 0) {
@@ -216,14 +285,14 @@ public class SuperpowerPlugin extends JavaPlugin implements Listener {
         String cleanName = stripColorCodes(displayName);
         if (!cleanName.equalsIgnoreCase("Superpower")) return;
 
-        if (!hasPlayerSuperpower(player.getName())) {
+        if (!hasPlayerSuperpower(player.getUniqueId())) {
             player.sendMessage(messageManager.getMessage("no-superpower"));
             event.setCancelled(true);
             return;
         }
 
-        if (hasPlayerCooldown(player.getName())) {
-            long remaining = getRemainingCooldown(player.getName());
+        if (hasPlayerCooldown(player.getUniqueId())) {
+            long remaining = getRemainingCooldown(player.getUniqueId());
             if (remaining > 0) {
                 long seconds = TimeUnit.MILLISECONDS.toSeconds(remaining);
                 player.sendMessage(messageManager.getMessage("cooldown-remaining")
@@ -270,11 +339,11 @@ public class SuperpowerPlugin extends JavaPlugin implements Listener {
     }
 
     private void activateSuperpower(Player player) {
-        String superpower = getPlayerSuperpower(player.getName());
+        String superpower = getPlayerSuperpower(player.getUniqueId());
 
         long cooldownDuration = configManager.getCooldownDuration(superpower);
         long cooldownEndTime = System.currentTimeMillis() + cooldownDuration * 1000;
-        setPlayerCooldown(player.getName(), cooldownEndTime);
+        setPlayerCooldown(player.getUniqueId(), cooldownEndTime);
 
         superpowerManager(player, superpower);
 
@@ -372,31 +441,113 @@ public class SuperpowerPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    public void giveRank(Player player, String rankId) {
-        if (!hasPlayerSuperpower(player.getName()) && !hasPlayerRank(player.getName())) {
-            // Purchase logic
-            int price = getRankPrice(rankId);
-            if (price > 0 && hasEnoughMoney(player, price)) {
-                withdrawMoney(player, price);
-                setPlayerRank(player, rankId);
-                savePlayerData();
-                player.sendMessage("&aYou purchased the &6" + getRankName(rankId) + " &ara rank! Cost: &6" + price);
-            } else if (price > 0) {
-                player.sendMessage("&cYou don't have enough money! Price: &6" + price);
-            }
-        } else {
-            player.sendMessage("&cYou already have a rank or superpower!");
-        }
-    }
-
-    public boolean hasPlayerRank(String playerName) {
         // Check if player has any rank via LuckPerms
         if (luckPerms == null) setupLuckPerms();
         if (luckPerms == null) return false;
         return luckPerms.getPlayerPrimaryGroup(playerName) != null;
     }
 
+    public boolean buyRank(Player player, String rankId) {
+        UUID uuid = player.getUniqueId();
+
+        if (hasPlayerSuperpower(uuid) && !player.hasPermission("superpower.rank.multiply")) {
+            player.sendMessage("&cYou already own a superpower! Use /superpower dismiss to remove it before purchasing a rank.");
+            return false;
+        }
+
+        if (playerRanks.containsKey(uuid) && playerRanks.get(uuid).equals(rankId)) {
+            player.sendMessage("&cYou already have the &6" + configManager.getRankName(rankId) + "&c rank!");
+            return false;
+        }
+
+        if (!configManager.isRankEnabled(rankId)) {
+            player.sendMessage("&cThe &6" + configManager.getRankName(rankId) + "&c rank is currently disabled.");
+            return false;
+        }
+
+        int price = configManager.getRankPrice(rankId);
+        if (price <= 0) {
+            player.sendMessage("&cThe &6" + configManager.getRankName(rankId) + "&c rank has an invalid price configuration.");
+            return false;
+        }
+
+        if (!hasEnoughMoney(player, price)) {
+            player.sendMessage("&cYou don't have enough money! &7Price: &6" + price + "&7 coins");
+            return false;
+        }
+
+        boolean success = setPlayerRank(uuid, rankId);
+        if (!success) {
+            player.sendMessage("&cFailed to apply the &6" + configManager.getRankName(rankId) + "&c rank. Please try again later.");
+            return false;
+        }
+
+        withdrawMoney(player, price);
+        savePlayerData();
+
+        player.sendMessage("&aYou purchased the &6" + configManager.getRankName(rankId) + "&a rank! Cost: &6" + price + "&a coins");
+        return true;
+    }
+
+    public boolean giftRank(Player player, String targetName, String rankId) {
+        Player target = Bukkit.getPlayerExact(targetName);
+        if (target == null) {
+            player.sendMessage("&cRecipient not found online.");
+            return false;
+        }
+        UUID targetUuid = target.getUniqueId();
+        UUID payerUuid = player.getUniqueId();
+
+        if (playerRanks.containsKey(targetUuid) && playerRanks.get(targetUuid).equals(rankId)) {
+            player.sendMessage("&cThe recipient already has the &6" + configManager.getRankName(rankId) + "&c rank.");
+            return false;
+        }
+
+        if (!configManager.isRankEnabled(rankId)) {
+            player.sendMessage("&cThe &6" + configManager.getRankName(rankId) + "&c rank is currently disabled.");
+            return false;
+        }
+
+        int price = configManager.getRankPrice(rankId);
+        if (price <= 0) {
+            player.sendMessage("&cThe &6" + configManager.getRankName(rankId) + "&c rank has an invalid price configuration.");
+            return false;
+        }
+
+        if (!hasEnoughMoney(player, price)) {
+            player.sendMessage("&cYou don't have enough money! &7Price: &6" + price + "&7 coins");
+            return false;
+        }
+
+        boolean success = setPlayerRank(targetUuid, rankId);
+        if (!success) {
+            player.sendMessage("&cFailed to apply the &6" + configManager.getRankName(rankId) + "&c rank to the recipient. Please try again later.");
+            return false;
+        }
+
+        withdrawMoney(player, price);
+        savePlayerData();
+
+        player.sendMessage("&aYou gifted the &6" + configManager.getRankName(rankId) + "&a rank to &e" + target.getName() + "&a! Cost: &6" + price + "&a coins");
+        return true;
+    }
+
+    public boolean hasPlayerRank(UUID uuid) {
+        if (luckPerms == null) setupLuckPerms();
+        if (luckPerms == null) return false;
+        String primaryGroup = luckPerms.getPlayerPrimaryGroup(uuid);
+        if (primaryGroup == null) return false;
+        for (String rankId : new String[]{"veteran", "elite", "legend"}) {
+            if (configManager.isRankEnabled(rankId)) {
+                String groupId = configManager.getRankPermission(rankId);
+                if (groupId != null && !groupId.isEmpty() && groupId.equals(primaryGroup)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private String stripColorCodes(String text) {
         return text.replaceAll("&[0-9a-fk-or]", "").replaceAll("§[0-9a-fk-or]", "");
     }
-}

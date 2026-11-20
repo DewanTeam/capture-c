@@ -14,4 +14,6 @@ dependencies:
       required: false
       join-classpath: true
     CommandAPI:
-      softdepend: true
+      load: BEFORE
+      required: true
+      join-classpath: true
