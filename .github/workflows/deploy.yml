@@ -92,7 +92,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SFTP_HOST: ${{ secrets.SFTP_HOST }}
-      SFTP_MANAGER_TARGET_DIR: ${{ secrets.SFTP_MANAGER_TARGET_DIR }}
     steps:
       - name: Download the tested JARs
         uses: actions/download-artifact@v8
