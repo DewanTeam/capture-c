@@ -281,8 +281,8 @@ final class FamilyRoutingModule implements Listener {
                 if (left[i] != right[i]) return false;
             }
             if (remainingBits == 0) return true;
-            int mask = 0xFF << (8 - remainingBits);
-            return (left[fullBytes] & mask) == (right[fullBytes] & mask);
+            int mask = (0xFF << (8 - remainingBits)) & 0xFF;
+            return ((left[fullBytes] & 0xFF) & mask) == ((right[fullBytes] & 0xFF) & mask);
         }
     }
 }
