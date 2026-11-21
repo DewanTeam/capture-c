@@ -902,8 +902,11 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, durationSeconds * 20,
                 configManager.getHulkStrengthAmplifier(), true, true, true));
         UUID playerId = player.getUniqueId();
-        fallImmunityUntil.put(playerId, System.currentTimeMillis() + durationSeconds * 1000L);
-        Bukkit.getScheduler().runTaskLater(this, () -> fallImmunityUntil.remove(playerId), durationSeconds * 20L);
+        long immunityExpiresAt = System.currentTimeMillis() + durationSeconds * 1000L;
+        fallImmunityUntil.put(playerId, immunityExpiresAt);
+        Bukkit.getScheduler().runTaskLater(this,
+                () -> fallImmunityUntil.remove(playerId, immunityExpiresAt),
+                durationSeconds * 20L);
         return true;
     }
 
