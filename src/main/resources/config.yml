@@ -3,7 +3,7 @@
 # not yet confirmed the final rank ladder, exact LuckPerms group names or perks.
 
 economy:
-  currency-name: coins
+  currency-symbol: "ᴛᴋ"
 
 superpowers:
   magneto:
