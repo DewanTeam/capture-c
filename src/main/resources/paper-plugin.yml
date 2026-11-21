@@ -2,7 +2,7 @@ name: SuperpowerPlugin
 version: '1.0.0'
 main: com.bushsmp.superpower.SuperpowerPlugin
 api-version: '26.1.2'
-description: "Family-network plugin with optional Superpower and RankShop modules. Commands when enabled: /superpower, /superpower shop, /superpower buy <power_id>, /superpower dismiss, /superpower reload, /rankshop, /rankshop buy <rank_id>, /rankshop gift <player> <rank_id>, /rankshop benefits."
+description: "Family-network plugin with optional Superpower and RankShop modules. Commands when enabled: /superpower, /superpower shop, /superpower buy <power_id>, /superpower gift <player> <rank_id>, /superpower dismiss, /superpower reload, /rankshop, /rankshop buy <rank_id>, /rankshop gift <player> <rank_id>, /rankshop benefits."
 dependencies:
   server:
     Vault:
