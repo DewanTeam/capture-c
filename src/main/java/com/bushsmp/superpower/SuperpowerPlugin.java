@@ -293,6 +293,16 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
                 .withSubcommand(new CommandAPICommand("buy")
                         .withArguments(new StringArgument("power_id"))
                         .executesPlayer((Player player, CommandArguments args) -> buyPower(player, (String) args.get("power_id"))))
+                .withSubcommand(new CommandAPICommand("gift")
+                        .withArguments(new StringArgument("recipient"), new StringArgument("rank_id"))
+                        .executesPlayer((Player player, CommandArguments args) -> {
+                            Player recipient = Bukkit.getPlayerExact((String) args.get("recipient"));
+                            if (recipient == null) {
+                                player.sendMessage(color("&cThe recipient must be online to receive a rank gift right now."));
+                                return;
+                            }
+                            rankService.gift(player, recipient, (String) args.get("rank_id"));
+                        }))
                 .withSubcommand(new CommandAPICommand("dismiss")
                         .executesPlayer((Player player, CommandArguments args) -> dismissPower(player)))
                 .withSubcommand(new CommandAPICommand("reload")
@@ -365,7 +375,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
     }
 
     private void showSuperpowerHelp(Player player) {
-        player.sendMessage(color("&6&lSuperpowers &7- &f/superpower shop &7| &f/superpower buy <power> &7| &f/superpower item &7| &f/superpower dismiss &7| &f/superpower reload"));
+        player.sendMessage(color("&6&lSuperpowers &7- &f/superpower shop &7| &f/superpower buy <power> &7| &f/superpower item &7| &f/superpower dismiss &7| &f/superpower gift &7| &f/superpower reload"));
         String current = playerSuperpowers.get(player.getUniqueId());
         player.sendMessage(color("&7Equipped power: &e" + (current == null ? "None" : configManager.getPowerName(current))));
     }
@@ -375,16 +385,16 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         for (String powerId : configManager.getPowerIds()) {
             if (!configManager.isPowerEnabled(powerId)) continue;
             player.sendMessage(color("&e" + powerId + " &7- " + configManager.getPowerName(powerId)
-                    + " &8| &a" + formatMoney(configManager.getPowerPrice(powerId)) + " coins &8| &7" + configManager.getPowerDescription(powerId)));
+                    + " &8| &a" + formatMoney(configManager.getPowerPrice(powerId)) + " &8| &7" + configManager.getPowerDescription(powerId)));
         }
     }
 
     private void showRankShop(Player player) {
-        player.sendMessage(color("&6&lRank Shop &7- balance: &a" + formatMoney(economy.getBalance(player)) + " coins"));
+        player.sendMessage(color("&6&lRank Shop &7- balance: &a" + formatMoney(economy.getBalance(player))));
         player.sendMessage(color("&7Choose a rank with &f/rankshop buy <rank> &7or gift one with &f/rankshop gift <online-player> <rank>"));
         for (String rankId : configManager.getRankIds()) {
             player.sendMessage(color("&e" + rankId + " &7- " + configManager.getRankName(rankId)
-                    + " &8| &a" + formatMoney(configManager.getRankPrice(rankId)) + " coins"
+                    + " &8| &a" + formatMoney(configManager.getRankPrice(rankId))
                     + " &8| &b+" + configManager.getRankDurationBonus(rankId) + "s to timed powers"));
         }
         player.sendMessage(color("&8Rank names, prices and LuckPerms groups are configurable examples until Dead Bush confirms the final rank ladder."));
@@ -416,7 +426,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
             return;
         }
         if (!economy.has(player, price)) {
-            player.sendMessage(color("&cYou do not have enough money. &7Price: &e" + formatMoney(price) + " coins"));
+            player.sendMessage(color("&cYou do not have enough money. &7Price: &e" + formatMoney(price)));
             return;
         }
         EconomyResponse response = economy.withdrawPlayer(player, price);
