@@ -1,0 +1,27 @@
+# Migration of the active AnimatedScoreboard defaultscoreboard to TAB 6.2+.
+#
+# Merge these sections into plugins/TAB/config.yml; do not overwrite your
+# existing TAB config with this snippet. Header/footer appears while a player
+# holds the vanilla Tab key. The sidebar scoreboard stays disabled.
+#
+# Existing PlaceholderAPI placeholders from AnimatedScoreboard are preserved.
+# Ensure the Vault and Jobs expansions are installed and loaded.
+
+header-footer:
+  enabled: true
+  designs:
+    default:
+      header:
+        - "<gradient:#FFB000:#FFFFFF><bold>BushSMP</bold></gradient>"
+        - "&7&m+----------------+"
+        - "&7» &6&lTokens"
+        - "    &7%vault_eco_balance_commas% ᴛᴋ"
+        - "&7» &6&lJobs"
+        - "    &f%jobsr_user_jobs%"
+        - "&7» &6&lOnline"
+        - "    &7%server_online% &6players"
+      footer:
+        - "&7Hold &fTAB &7to view server information"
+
+scoreboard:
+  enabled: false
