@@ -1,16 +1,16 @@
 # SuperpowerPlugin
 
-Paper/Purpur plugin for Java 25, targeting Purpur/Paper 1.21.5+ and the supplied Purpur 26.1.2 test server.
+Paper/Purpur plugin for Java 25, targeting Paper 26.3 and Purpur 26.1.2+ (the minimum supported API baseline is 26.1.2).
 
 ## Implemented systems
 
 - Vault economy purchases for the configured six-power catalogue.
-- A PDC-marked Superpower Activator item, so an ordinary renamed diamond cannot spoof it.
+- A single PDC-marked Superpower Activator item; duplicate marked activators are normalized, and the diamond is not consumed on use.
 - LuckPerms-backed rank purchases and gifts, including configured rank upgrades. The default LuckPerms group is not treated as a paid rank; paid rank ownership is determined from configured rank groups.
 - Rank assignment is attempted and saved before Vault withdraws money. If payment fails, the LuckPerms change is rolled back. Transactions are serialized per payer/recipient and recorded in `transactions.yml`.
-- UUID-based player power, rank and cooldown persistence in `players.yml`.
-- Configurable timed power effects and the confirmed rank duration progression: base 30 seconds, then +2/+4/+6 seconds for the three sample rank tiers.
-- Firey is implemented as a particle-only fireball visual with a five-second shot interval; it does not create damaging projectiles or alter blocks.
+- UUID-based player power, rank and per-power cooldown persistence in `players.yml`; legacy shared cooldown data is read during migration.
+- Configurable timed power effects and the confirmed rank duration progression: base 30 seconds, then +2/+4/+6 seconds for the three sample rank tiers. Arise summons ignore player targets and retain persistent expiry markers so unloaded chunks are cleaned when they load.
+- Firey is implemented as a particle-only fireball visual with a separate five-second shot interval; it does not create damaging projectiles or alter blocks. Dismissing a power does not erase that power's cooldown.
 - DialogEngine menus shipped under `src/main/resources/dialogs/shop.yml`, registered dynamically through the DialogEngine 0.8.x API. The G launcher opens a rank shop and superpower shop on supported clients.
 
 ## Required server plugins
@@ -33,7 +33,8 @@ Native DialogEngine dialogs and Quick Actions require a supported Minecraft clie
 - `/superpower shop` — open/list the power shop.
 - `/superpower buy <power_id>` — buy a configured power.
 - `/superpower item` — give yourself the PDC-marked activator.
-- `/superpower dismiss` — remove your current power.
+- `/superpower dismiss` — remove your current power without resetting its cooldown.
+- `/superpower reload` — reload `config.yml` and the DialogEngine menus (admin/operator only).
 - `/superpower giveitem <online_player>` — operator/admin utility to give an activator.
 
 ## Configure before a real purchase test
@@ -46,10 +47,10 @@ The gift form currently requires the recipient to be online. Offline gifting is 
 
 ## Build
 
-Use JDK 25 and Gradle 9.9.2:
+Use JDK 25 and the Gradle 9.9.2 wrapper:
 
 ```bash
-gradle --no-daemon clean build
+./gradlew --no-daemon clean build
 ```
 
-The JAR is emitted as `build/libs/SuperpowerPlugin.jar`.
+The JAR is emitted as `build/libs/SuperpowerPlugin.jar`. Displayed balances use the configured `economy.currency-symbol` (default `ᴛᴋ`).
