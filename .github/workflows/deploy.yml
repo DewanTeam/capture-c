@@ -59,15 +59,15 @@ jobs:
           ./gradlew --version
 
       - name: Build plugin
-        run: ./gradlew --no-daemon clean :manager:clean build
+        run: ./gradlew --no-daemon clean build
 
       - name: Upload plugin JAR artifact
         uses: actions/upload-artifact@v7
         with:
           name: SuperpowerPlugin
           path: |
-            dist/build/libs/SuperpowerPlugin.jar
-            dist/manager/build/libs/ANOBank-PaperProxy-Manager.jar
+            build/libs/SuperpowerPlugin.jar
+            manager/build/libs/ANOBank-PaperProxy-Manager.jar
           if-no-files-found: error
           retention-days: 14
 
@@ -106,8 +106,8 @@ jobs:
           tag_name: latest
           name: Latest Build
           files: |
-            build/libs/SuperpowerPlugin.jar
-            manager/build/libs/ANOBank-PaperProxy-Manager.jar
+            dist/build/libs/SuperpowerPlugin.jar
+            dist/manager/build/libs/ANOBank-PaperProxy-Manager.jar
           make_latest: true
 
       - name: Deploy plugin JAR to Purpur server over SFTP
