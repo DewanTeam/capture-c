@@ -94,10 +94,19 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         // The family-network core has no Vault, LuckPerms, CommandAPI or Redis
         // requirement. Install the same universal JAR on any supported backend.
         if (getConfig().getBoolean("modules.family-routing.enabled", false)) {
-            new FamilyRoutingModule(this);
+            try {
+                new FamilyRoutingModule(this);
+            } catch (RuntimeException exception) {
+                getLogger().severe("Family routing could not start: " + exception.getMessage()
+                        + ". SuperpowerPlugin will remain enabled without automatic transfer.");
+            }
         }
         if (getConfig().getBoolean("modules.neocity-filter.enabled", false)) {
-            new NeoCityFilterModule(this);
+            try {
+                new NeoCityFilterModule(this);
+            } catch (RuntimeException exception) {
+                getLogger().severe("NeoCityFilter could not start: " + exception.getMessage());
+            }
         }
 
         boolean requested = getConfig().getBoolean("modules.superpowers.enabled", false);
