@@ -149,24 +149,44 @@ public final class RankService {
                             gift ? "gift" : "purchase", buyerId, recipientId, rankId, price);
 
                     if (!transactionSaved) {
-                        plugin.getLogger().severe("Could not persist rank transaction for payer " + buyerId + " and recipient " + recipientId + ". Starting rollback and refund.");
+                        plugin.getLogger().severe("Could not persist rank transaction for payer " + buyerId + " and recipient " + recipientId + ". Refunding immediately before asynchronous LuckPerms rollback.");
                         if (previousStoredRank == null) plugin.removeStoredRank(recipientId);
                         else plugin.storeRank(recipientId, previousStoredRank);
-                        rollback(change).whenComplete((ignored, rollbackError) -> Bukkit.getScheduler().runTask(plugin, () -> {
-                            if (rollbackError == null) {
-                                EconomyResponse refund = economy.depositPlayer(payer, price);
-                                if (!refund.transactionSuccess()) {
-                                    plugin.getLogger().severe("Refund failed for " + buyerId + " after rank persistence failure: " + refund.errorMessage);
-                                    buyer.sendMessage(color("&cThe rank transaction needs administrator attention. Please contact staff."));
-                                } else {
-                                    buyer.sendMessage(color("&cThe transaction could not be saved. Your payment was refunded and the rank was reverted."));
-                                }
-                            } else {
-                                plugin.getLogger().log(Level.SEVERE, "Rank rollback failed after persistence failure; payment was retained and rank may already be applied.", unwrap(rollbackError));
-                                buyer.sendMessage(color("&cYour rank was applied and payment processed, but transaction storage failed. Please contact an administrator."));
+
+                        // Vault's refund is performed synchronously on the main thread
+                        // before starting async LuckPerms work. A plugin shutdown while
+                        // that rollback future is pending can no longer skip the refund.
+                        EconomyResponse refund = economy.depositPlayer(payer, price);
+                        if (!refund.transactionSuccess()) {
+                            plugin.getLogger().severe("Immediate refund failed for " + buyerId
+                                    + " after rank persistence failure: " + refund.errorMessage);
+                        }
+
+                        rollback(change).whenComplete((ignored, rollbackError) -> {
+                            if (rollbackError != null) {
+                                plugin.getLogger().log(Level.SEVERE,
+                                        "Rank rollback failed after persistence failure for " + recipientId
+                                                + ". Refund result: " + refund.errorMessage,
+                                        unwrap(rollbackError));
                             }
                             release(buyerId, recipientId);
-                        }));
+                            if (shuttingDown || !plugin.isEnabled()) return;
+                            try {
+                                Bukkit.getScheduler().runTask(plugin, () -> {
+                                    if (!refund.transactionSuccess()) {
+                                        buyer.sendMessage(color("&cThe rank transaction needs administrator attention. Please contact staff."));
+                                    } else if (rollbackError == null) {
+                                        buyer.sendMessage(color("&cThe transaction could not be saved. Your payment was refunded and the rank was reverted."));
+                                    } else {
+                                        buyer.sendMessage(color("&cYour payment was refunded, but automatic rank rollback needs administrator attention. Contact staff."));
+                                    }
+                                });
+                            } catch (RuntimeException schedulingError) {
+                                plugin.getLogger().log(Level.WARNING,
+                                        "Could not schedule rank transaction failure feedback.",
+                                        schedulingError);
+                            }
+                        });
                         return;
                     }
 
