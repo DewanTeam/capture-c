@@ -64,6 +64,9 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
     private LuckPerms luckPerms;
     private ConfigManager configManager;
     private RankService rankService;
+    private boolean powersActive;
+    private boolean ranksActive;
+    private boolean superpowerFeaturesActive;
 
     private final Map<UUID, String> playerSuperpowers = new ConcurrentHashMap<>();
     private final Map<UUID, String> playerRanks = new ConcurrentHashMap<>();
@@ -87,53 +90,103 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
     public void onEnable() {
         saveDefaultConfig();
         configManager = new ConfigManager(this);
-        superpowerItemKey = new NamespacedKey(this, "superpower_activator");
-        arisenEntityKey = new NamespacedKey(this, "arisen_summon");
-        arisenExpiresAtKey = new NamespacedKey(this, "arisen_expires_at");
 
-        if (!setupEconomy()) {
-            getLogger().severe("Vault economy provider not found. Install Vault and an economy provider before enabling SuperpowerPlugin.");
-            getServer().getPluginManager().disablePlugin(this);
-            return;
+        // The family-network core has no Vault, LuckPerms, CommandAPI or Redis
+        // requirement. Install the same universal JAR on any supported backend.
+        if (getConfig().getBoolean("modules.family-routing.enabled", false)) {
+            new FamilyRoutingModule(this);
         }
-        if (!setupLuckPerms()) {
-            getLogger().severe("LuckPerms API not found. Install LuckPerms before enabling rank purchases.");
-            getServer().getPluginManager().disablePlugin(this);
-            return;
+        if (getConfig().getBoolean("modules.neocity-filter.enabled", false)) {
+            new NeoCityFilterModule(this);
         }
 
-        loadPlayerData();
-        rankService = new RankService(this, configManager, economy, luckPerms);
-        setupDialogEngine();
-        registerCommands();
-        getServer().getPluginManager().registerEvents(this, this);
-        for (Player online : Bukkit.getOnlinePlayers()) {
-            syncPlayerRank(online);
-            normalizeActivatorItems(online);
+        boolean requested = getConfig().getBoolean("modules.superpowers.enabled", false);
+        boolean hasPowerEntries = hasEnabledEntries("superpowers");
+        boolean hasRankEntries = hasEnabledEntries("ranks");
+        powersActive = requested && hasPowerEntries;
+        ranksActive = requested && hasRankEntries;
+
+        if (requested && !powersActive && !ranksActive) {
+            getLogger().warning("Superpower module was requested, but no superpowers or ranks are configured. It remains inactive.");
         }
-        for (World world : Bukkit.getWorlds()) {
-            for (org.bukkit.Chunk chunk : world.getLoadedChunks()) cleanupArisenChunk(chunk);
+
+        if (powersActive || ranksActive) {
+            if (!getServer().getPluginManager().isPluginEnabled("CommandAPI")) {
+                getLogger().severe("Superpower/RankShop configuration is present, but CommandAPI 12.x is not installed. Those optional modules remain inactive; family routing and NeoCityFilter continue to work.");
+                powersActive = false;
+                ranksActive = false;
+            } else if (!setupEconomy()) {
+                getLogger().severe("Superpower/RankShop configuration is present, but Vault and a Vault economy provider are unavailable. Those optional modules remain inactive.");
+                powersActive = false;
+                ranksActive = false;
+            } else if (ranksActive && !setupLuckPerms()) {
+                getLogger().severe("RankShop configuration is present, but LuckPerms is unavailable. RankShop remains inactive; the independent Superpower shop can still run.");
+                ranksActive = false;
+            }
         }
-        getLogger().info("SuperpowerPlugin enabled. Powers: " + configManager.getPowerIds().size()
-                + ", configured rank entries: " + configManager.getRankIds().size());
+
+        superpowerFeaturesActive = powersActive || ranksActive;
+        if (superpowerFeaturesActive) {
+            if (powersActive) {
+                superpowerItemKey = new NamespacedKey(this, "superpower_activator");
+                arisenEntityKey = new NamespacedKey(this, "arisen_summon");
+                arisenExpiresAtKey = new NamespacedKey(this, "arisen_expires_at");
+            }
+
+            loadPlayerData();
+            if (ranksActive) {
+                rankService = new RankService(this, configManager, economy, luckPerms);
+            }
+            setupDialogEngine();
+            registerCommands();
+            getServer().getPluginManager().registerEvents(this, this);
+
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                if (ranksActive) syncPlayerRank(online);
+                if (powersActive) normalizeActivatorItems(online);
+            }
+            if (powersActive) {
+                for (World world : Bukkit.getWorlds()) {
+                    for (org.bukkit.Chunk chunk : world.getLoadedChunks()) cleanupArisenChunk(chunk);
+                }
+            }
+        }
+
+        getLogger().info("SuperpowerPlugin backend enabled. Family routing="
+                + getConfig().getBoolean("modules.family-routing.enabled", false)
+                + ", NeoCityFilter=" + getConfig().getBoolean("modules.neocity-filter.enabled", false)
+                + ", Superpower=" + powersActive + ", RankShop=" + ranksActive + ".");
     }
 
     @Override
     public void onDisable() {
+        if (!superpowerFeaturesActive) return;
+
         if (rankService != null) rankService.shutdown();
-        for (UUID playerId : new ArrayList<>(gravityTasks.keySet())) restoreGravity(playerId);
-        for (BukkitTask task : fireyTasks.values()) task.cancel();
-        fireyTasks.clear();
-        for (BukkitTask task : arisenCleanupTasks.values()) task.cancel();
-        arisenCleanupTasks.clear();
-        for (UUID entityId : new ArrayList<>(arisenEntities)) {
-            Entity entity = Bukkit.getEntity(entityId);
-            if (entity != null) entity.remove();
+        if (powersActive) {
+            for (UUID playerId : new ArrayList<>(gravityTasks.keySet())) restoreGravity(playerId);
+            for (BukkitTask task : fireyTasks.values()) task.cancel();
+            fireyTasks.clear();
+            for (BukkitTask task : arisenCleanupTasks.values()) task.cancel();
+            arisenCleanupTasks.clear();
+            for (UUID entityId : new ArrayList<>(arisenEntities)) {
+                Entity entity = Bukkit.getEntity(entityId);
+                if (entity != null) entity.remove();
+            }
+            arisenEntities.clear();
+            fireyActiveUntil.clear();
+            fireyShotCooldowns.clear();
         }
-        arisenEntities.clear();
-        fireyActiveUntil.clear();
-        fireyShotCooldowns.clear();
         savePlayerData();
+    }
+
+    private boolean hasEnabledEntries(String root) {
+        ConfigurationSection section = getConfig().getConfigurationSection(root);
+        if (section == null) return false;
+        for (String key : section.getKeys(false)) {
+            if (getConfig().getBoolean(root + "." + key + ".enabled", false)) return true;
+        }
+        return false;
     }
 
     private boolean setupEconomy() {
@@ -283,70 +336,74 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
     }
 
     private void registerCommands() {
-        new CommandAPICommand("superpower")
-                .executesPlayer((Player player, CommandArguments args) -> {
-                    if (!openDialog(player, "superpower:launcher")) showSuperpowerHelp(player);
-                })
-                .withSubcommand(new CommandAPICommand("shop")
-                        .executesPlayer((Player player, CommandArguments args) -> {
-                            if (!openDialog(player, "superpower:power_shop")) showPowerShop(player);
-                        }))
-                .withSubcommand(new CommandAPICommand("buy")
-                        .withArguments(new StringArgument("power_id"))
-                        .executesPlayer((Player player, CommandArguments args) -> buyPower(player, (String) args.get("power_id"))))
-                .withSubcommand(new CommandAPICommand("gift")
-                        .withArguments(new StringArgument("recipient"), new StringArgument("rank_id"))
-                        .executesPlayer((Player player, CommandArguments args) -> {
-                            Player recipient = Bukkit.getPlayerExact((String) args.get("recipient"));
-                            if (recipient == null) {
-                                player.sendMessage(color("&cThe recipient must be online to receive a rank gift right now."));
-                                return;
-                            }
-                            rankService.gift(player, recipient, (String) args.get("rank_id"));
-                        }))
-                .withSubcommand(new CommandAPICommand("dismiss")
-                        .executesPlayer((Player player, CommandArguments args) -> dismissPower(player)))
-                .withSubcommand(new CommandAPICommand("reload")
-                        .executesPlayer((Player player, CommandArguments args) -> reloadPluginConfig(player)))
-                .withSubcommand(new CommandAPICommand("item")
-                        .executesPlayer((Player player, CommandArguments args) -> giveActivator(player)))
-                .withSubcommand(new CommandAPICommand("giveitem")
-                        .withArguments(new StringArgument("recipient"))
-                        .executesPlayer((Player player, CommandArguments args) -> {
-                            if (!isAdmin(player)) {
-                                player.sendMessage(color("&cYou do not have permission to give activators."));
-                                return;
-                            }
-                            Player recipient = Bukkit.getPlayerExact((String) args.get("recipient"));
-                            if (recipient == null) {
-                                player.sendMessage(color("&cThat player must be online."));
-                                return;
-                            }
-                            giveActivator(recipient);
-                            player.sendMessage(color("&aActivator given to &e" + recipient.getName() + "&a."));
-                        }))
-                .register();
+        if (powersActive) {
+            new CommandAPICommand("superpower")
+                    .executesPlayer((Player player, CommandArguments args) -> {
+                        if (!openDialog(player, "superpower:launcher")) showSuperpowerHelp(player);
+                    })
+                    .withSubcommand(new CommandAPICommand("shop")
+                            .executesPlayer((Player player, CommandArguments args) -> {
+                                if (!openDialog(player, "superpower:power_shop")) showPowerShop(player);
+                            }))
+                    .withSubcommand(new CommandAPICommand("buy")
+                            .withArguments(new StringArgument("power_id"))
+                            .executesPlayer((Player player, CommandArguments args) -> buyPower(player, (String) args.get("power_id"))))
+                    .withSubcommand(new CommandAPICommand("gift")
+                            .withArguments(new StringArgument("recipient"), new StringArgument("rank_id"))
+                            .executesPlayer((Player player, CommandArguments args) -> {
+                                Player recipient = Bukkit.getPlayerExact((String) args.get("recipient"));
+                                if (recipient == null) {
+                                    player.sendMessage(color("&cThe recipient must be online to receive a rank gift right now."));
+                                    return;
+                                }
+                                rankService.gift(player, recipient, (String) args.get("rank_id"));
+                            }))
+                    .withSubcommand(new CommandAPICommand("dismiss")
+                            .executesPlayer((Player player, CommandArguments args) -> dismissPower(player)))
+                    .withSubcommand(new CommandAPICommand("reload")
+                            .executesPlayer((Player player, CommandArguments args) -> reloadPluginConfig(player)))
+                    .withSubcommand(new CommandAPICommand("item")
+                            .executesPlayer((Player player, CommandArguments args) -> giveActivator(player)))
+                    .withSubcommand(new CommandAPICommand("giveitem")
+                            .withArguments(new StringArgument("recipient"))
+                            .executesPlayer((Player player, CommandArguments args) -> {
+                                if (!isAdmin(player)) {
+                                    player.sendMessage(color("&cYou do not have permission to give activators."));
+                                    return;
+                                }
+                                Player recipient = Bukkit.getPlayerExact((String) args.get("recipient"));
+                                if (recipient == null) {
+                                    player.sendMessage(color("&cThat player must be online."));
+                                    return;
+                                }
+                                giveActivator(recipient);
+                                player.sendMessage(color("&aActivator given to &e" + recipient.getName() + "&a."));
+                            }))
+                    .register();
+        }
 
-        new CommandAPICommand("rankshop")
-                .executesPlayer((Player player, CommandArguments args) -> {
-                    if (!openDialog(player, "superpower:rankshop")) showRankShop(player);
-                })
-                .withSubcommand(new CommandAPICommand("buy")
-                        .withArguments(new StringArgument("rank_id"))
-                        .executesPlayer((Player player, CommandArguments args) -> rankService.purchase(player, (String) args.get("rank_id"))))
-                .withSubcommand(new CommandAPICommand("gift")
-                        .withArguments(new StringArgument("recipient"), new StringArgument("rank_id"))
-                        .executesPlayer((Player player, CommandArguments args) -> {
-                            Player recipient = Bukkit.getPlayerExact((String) args.get("recipient"));
-                            if (recipient == null) {
-                                player.sendMessage(color("&cThe recipient must be online to receive a rank gift right now."));
-                                return;
-                            }
-                            rankService.gift(player, recipient, (String) args.get("rank_id"));
-                        }))
-                .withSubcommand(new CommandAPICommand("benefits")
-                        .executesPlayer((Player player, CommandArguments args) -> showRankBenefits(player)))
-                .register();
+        if (ranksActive) {
+            new CommandAPICommand("rankshop")
+                    .executesPlayer((Player player, CommandArguments args) -> {
+                        if (!openDialog(player, "superpower:rankshop")) showRankShop(player);
+                    })
+                    .withSubcommand(new CommandAPICommand("buy")
+                            .withArguments(new StringArgument("rank_id"))
+                            .executesPlayer((Player player, CommandArguments args) -> rankService.purchase(player, (String) args.get("rank_id"))))
+                    .withSubcommand(new CommandAPICommand("gift")
+                            .withArguments(new StringArgument("recipient"), new StringArgument("rank_id"))
+                            .executesPlayer((Player player, CommandArguments args) -> {
+                                Player recipient = Bukkit.getPlayerExact((String) args.get("recipient"));
+                                if (recipient == null) {
+                                    player.sendMessage(color("&cThe recipient must be online to receive a rank gift right now."));
+                                    return;
+                                }
+                                rankService.gift(player, recipient, (String) args.get("rank_id"));
+                            }))
+                    .withSubcommand(new CommandAPICommand("benefits")
+                            .executesPlayer((Player player, CommandArguments args) -> showRankBenefits(player)))
+                    .register();
+        }
     }
 
     private boolean isAdmin(Player player) {
@@ -503,6 +560,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
     }
 
     private boolean isActivator(ItemStack item) {
+        if (!powersActive || superpowerItemKey == null) return false;
         if (item == null || item.getType() != Material.DIAMOND || !item.hasItemMeta()) return false;
         Byte marker = item.getItemMeta().getPersistentDataContainer().get(superpowerItemKey, PersistentDataType.BYTE);
         return marker != null && marker == (byte) 1;
@@ -510,6 +568,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
+        if (!powersActive) return;
         if (event.getHand() == null || event.getHand() == org.bukkit.inventory.EquipmentSlot.OFF_HAND) return;
         Action action = event.getAction();
         if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;
@@ -783,12 +842,14 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onArisenTarget(EntityTargetLivingEntityEvent event) {
+        if (!powersActive) return;
         if (!(event.getEntity() instanceof Zombie zombie) || !(event.getTarget() instanceof Player)) return;
         if (isArisen(zombie)) event.setCancelled(true);
     }
 
     @EventHandler
     public void onChunkLoad(ChunkLoadEvent event) {
+        if (!powersActive) return;
         cleanupArisenChunk(event.getChunk());
     }
 
@@ -834,11 +895,12 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
-        syncPlayerRank(event.getPlayer());
-        normalizeActivatorItems(event.getPlayer());
+        if (ranksActive) syncPlayerRank(event.getPlayer());
+        if (powersActive) normalizeActivatorItems(event.getPlayer());
     }
 
     private void syncPlayerRank(Player player) {
+        if (!ranksActive || luckPerms == null) return;
         UUID playerId = player.getUniqueId();
         luckPerms.getUserManager().loadUser(playerId).whenComplete((user, error) -> {
             if (error != null) {
@@ -879,6 +941,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerFallDamage(EntityDamageEvent event) {
+        if (!powersActive) return;
         if (!(event.getEntity() instanceof Player player) || event.getCause() != EntityDamageEvent.DamageCause.FALL) return;
         Long immuneUntil = fallImmunityUntil.get(player.getUniqueId());
         if (immuneUntil != null && immuneUntil > System.currentTimeMillis()) event.setCancelled(true);
@@ -886,6 +949,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
+        if (!powersActive) return;
         UUID playerId = event.getPlayer().getUniqueId();
         restoreGravity(playerId);
         fireyActiveUntil.remove(playerId);
@@ -998,6 +1062,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
     }
 
     private boolean savePlayerData() {
+        if (!superpowerFeaturesActive) return true;
         if (getDataFolder() != null && !getDataFolder().exists() && !getDataFolder().mkdirs()) {
             getLogger().severe("Could not create plugin data directory.");
             return false;
