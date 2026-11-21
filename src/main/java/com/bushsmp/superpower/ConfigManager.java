@@ -17,6 +17,15 @@ public final class ConfigManager {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
     }
 
+    public String getCurrencySymbol() {
+        String symbol = plugin.getConfig().getString("economy.currency-symbol", "ᴛᴋ");
+        return symbol == null || symbol.isBlank() ? "ᴛᴋ" : symbol.trim();
+    }
+
+    public String formatCurrency(double amount) {
+        return new java.text.DecimalFormat("#,##0.##").format(amount) + " " + getCurrencySymbol();
+    }
+
     public List<String> getPowerIds() {
         ConfigurationSection section = plugin.getConfig().getConfigurationSection("superpowers");
         if (section == null) return List.of();
