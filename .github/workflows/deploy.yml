@@ -134,23 +134,3 @@ jobs:
           put "dist/build/libs/SuperpowerPlugin.jar" -o "SuperpowerPlugin.jar"
           bye
           EOF
-
-      - name: Optionally upload standalone manager JAR to HidenCloud
-        if: env.SFTP_HOST != '' && env.SFTP_MANAGER_TARGET_DIR != ''
-        env:
-          SFTP_HOST: ${{ secrets.SFTP_HOST }}
-          SFTP_PORT: ${{ secrets.SFTP_PORT }}
-          SFTP_USER: ${{ secrets.SFTP_USER }}
-          SFTP_PASS: ${{ secrets.SFTP_PASS }}
-          SFTP_MANAGER_TARGET_DIR: ${{ secrets.SFTP_MANAGER_TARGET_DIR }}
-        shell: bash
-        run: |
-          PORT="${SFTP_PORT:-22}"
-          lftp -u "$SFTP_USER","$SFTP_PASS" -p "$PORT" "sftp://$SFTP_HOST" <<EOF
-          set cmd:fail-exit yes
-          set sftp:auto-confirm yes
-          mkdir -p "$SFTP_MANAGER_TARGET_DIR"
-          cd "$SFTP_MANAGER_TARGET_DIR"
-          put "dist/manager/build/libs/ANOBank-PaperProxy-Manager.jar" -o "ANOBank-PaperProxy-Manager.jar"
-          bye
-          EOF
