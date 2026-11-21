@@ -49,7 +49,7 @@ final class FamilyRoutingModule implements Listener {
     FamilyRoutingModule(JavaPlugin plugin) {
         this.plugin = plugin;
         this.enabled = plugin.getConfig().getBoolean("modules.family-routing.enabled", false);
-        this.preferences = new PreferenceStore(plugin);
+        this.preferences = enabled ? new PreferenceStore(plugin) : null;
 
         String root = "family-routing.";
         this.serverId = normalize(plugin.getConfig().getString(root + "server-id", ""));
@@ -66,7 +66,7 @@ final class FamilyRoutingModule implements Listener {
 
         for (String value : plugin.getConfig().getStringList(root + "trusted-proxy-peers")) {
             try {
-                trustedProxyPeers.add(AddressMatcher.parse(value));
+                trustedProxyPeers.addAll(AddressMatcher.parse(value));
             } catch (Exception exception) {
                 plugin.getLogger().warning("Ignoring invalid trusted proxy peer '" + value + "': " + exception.getMessage());
             }
@@ -251,7 +251,7 @@ final class FamilyRoutingModule implements Listener {
             this.prefixBits = prefixBits;
         }
 
-        static AddressMatcher parse(String raw) throws Exception {
+        static List<AddressMatcher> parse(String raw) throws Exception {
             if (raw == null || raw.isBlank()) throw new IllegalArgumentException("value is blank");
             String value = raw.trim();
             int slash = value.indexOf('/');
@@ -260,10 +260,15 @@ final class FamilyRoutingModule implements Listener {
                 int prefix = Integer.parseInt(value.substring(slash + 1).trim());
                 int max = network.getAddress().length * 8;
                 if (prefix < 0 || prefix > max) throw new IllegalArgumentException("prefix must be 0.." + max);
-                return new AddressMatcher(network, prefix);
+                return List.of(new AddressMatcher(network, prefix));
             }
-            return new AddressMatcher(InetAddress.getAllByName(value)[0],
-                    InetAddress.getAllByName(value)[0].getAddress().length * 8);
+
+            List<AddressMatcher> resolved = new ArrayList<>();
+            for (InetAddress address : InetAddress.getAllByName(value)) {
+                resolved.add(new AddressMatcher(address, address.getAddress().length * 8));
+            }
+            if (resolved.isEmpty()) throw new IllegalArgumentException("hostname resolved to no addresses");
+            return resolved;
         }
 
         boolean matches(InetAddress candidate) {
