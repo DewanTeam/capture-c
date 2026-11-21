@@ -337,7 +337,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
 
     private void registerCommands() {
         if (powersActive) {
-            new CommandAPICommand("superpower")
+            CommandAPICommand superpowerCommand = new CommandAPICommand("superpower")
                     .executesPlayer((Player player, CommandArguments args) -> {
                         if (!openDialog(player, "superpower:launcher")) showSuperpowerHelp(player);
                     })
@@ -348,16 +348,6 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
                     .withSubcommand(new CommandAPICommand("buy")
                             .withArguments(new StringArgument("power_id"))
                             .executesPlayer((Player player, CommandArguments args) -> buyPower(player, (String) args.get("power_id"))))
-                    .withSubcommand(new CommandAPICommand("gift")
-                            .withArguments(new StringArgument("recipient"), new StringArgument("rank_id"))
-                            .executesPlayer((Player player, CommandArguments args) -> {
-                                Player recipient = Bukkit.getPlayerExact((String) args.get("recipient"));
-                                if (recipient == null) {
-                                    player.sendMessage(color("&cThe recipient must be online to receive a rank gift right now."));
-                                    return;
-                                }
-                                rankService.gift(player, recipient, (String) args.get("rank_id"));
-                            }))
                     .withSubcommand(new CommandAPICommand("dismiss")
                             .executesPlayer((Player player, CommandArguments args) -> dismissPower(player)))
                     .withSubcommand(new CommandAPICommand("reload")
@@ -379,17 +369,9 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
                                 giveActivator(recipient);
                                 player.sendMessage(color("&aActivator given to &e" + recipient.getName() + "&a."));
                             }))
-                    .register();
-        }
-
-        if (ranksActive) {
-            new CommandAPICommand("rankshop")
-                    .executesPlayer((Player player, CommandArguments args) -> {
-                        if (!openDialog(player, "superpower:rankshop")) showRankShop(player);
-                    })
-                    .withSubcommand(new CommandAPICommand("buy")
-                            .withArguments(new StringArgument("rank_id"))
-                            .executesPlayer((Player player, CommandArguments args) -> rankService.purchase(player, (String) args.get("rank_id"))))
+                    ;
+            if (ranksActive) {
+                superpowerCommand.withSubcommand(new CommandAPICommand("gift")
                     .withSubcommand(new CommandAPICommand("gift")
                             .withArguments(new StringArgument("recipient"), new StringArgument("rank_id"))
                             .executesPlayer((Player player, CommandArguments args) -> {
@@ -400,13 +382,10 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
                                 }
                                 rankService.gift(player, recipient, (String) args.get("rank_id"));
                             }))
-                    .withSubcommand(new CommandAPICommand("benefits")
-                            .executesPlayer((Player player, CommandArguments args) -> showRankBenefits(player)))
-                    .register();
-        }
-    }
-
-    private boolean isAdmin(Player player) {
+                    
+                );
+            }
+            superpowerCommand.register();    private boolean isAdmin(Player player) {
         return player.isOp() || player.hasPermission("superpower.admin");
     }
 
