@@ -49,3 +49,11 @@ tasks.named<Jar>("jar") {
         )
     }
 }
+
+tasks.named("clean") {
+    dependsOn(":manager:clean")
+}
+
+tasks.named("build") {
+    dependsOn(":manager:build")
+}
