@@ -1,100 +1,66 @@
-# SuperpowerPlugin configuration for Purpur/Paper 1.21.5+.
-# Rank names, prices and group IDs below are provisional examples. Dead Bush has
-# not yet confirmed the final rank ladder, exact LuckPerms group names or perks.
+# SuperpowerPlugin universal backend configuration.
+# All optional gameplay/network modules are OFF until explicitly enabled.
+#
+# Family routing can be enabled on a backend after server-id, transfer-target,
+# trusted-proxy-peers and direct-bypass-hosts have been configured.
+#
+# Superpowers/RankShop are intentionally absent from the generated defaults.
+# To enable them on BushSMP only:
+#   1. Set modules.superpowers.enabled: true
+#   2. Add the superpowers:, cooldowns:, economy: and/or ranks: sections below.
+#   3. Install Vault + an economy provider; install LuckPerms for ranks;
+#      install CommandAPI 12.x for the Superpower/RankShop commands.
+# Sample prices/rank names should be confirmed with Dead Bush before purchases.
 
-economy:
-  currency-symbol: "ᴛᴋ"
+modules:
+  family-routing:
+    enabled: false
+  neocity-filter:
+    enabled: false
+  superpowers:
+    enabled: false
 
-superpowers:
-  magneto:
-    enabled: true
-    name: Magneto
-    description: Hover five blocks above your starting position.
-    price: 5000.0 # Provisional shop price from the existing project config.
-    duration: 30
-    height: 5
-  firey:
-    enabled: true
-    name: Firey
-    description: Launch a harmless particle-only fireball visual during Firey mode.
-    price: 8000.0 # Provisional shop price from the existing project config.
-    duration: 30
-    visual-cooldown: 5
-  frozen:
-    enabled: true
-    name: Frozen
-    description: Freeze nearby players for a short duration.
-    price: 6000.0 # Provisional shop price from the existing project config.
-    duration: 30
-    radius: 10
-    freeze-duration: 3
-  arise:
-    enabled: true
-    name: Arise
-    description: Summon a temporary group of undead allies.
-    price: 15000.0 # Provisional shop price from the existing project config.
-    duration: 30
-    mob-count: 20
-    enchanted-count: 7
-    armor-tier: NETHERITE
-  flash:
-    enabled: true
-    name: Flash
-    description: Gain a powerful Speed effect.
-    price: 4000.0 # Provisional shop price from the existing project config.
-    duration: 30
-    amplifier: 19
-  hulk:
-    enabled: true
-    name: Hulk
-    description: Gain Jump Boost V, Strength II and temporary fall-damage immunity.
-    price: 7000.0 # Provisional shop price from the existing project config.
-    duration: 30
-    jump-amplifier: 4
-    strength-amplifier: 1
+family-routing:
+  # Unique matching [servers] name from this backend in velocity.toml.
+  server-id: "SET_ME"
 
-# Cooldowns are separate from the rank duration bonus.
-# The Firey visual has its own 5-second reactivation delay.
-cooldowns:
-  default: 1800
-  magneto: 1800
-  frozen: 1800
-  arise: 1800
-  flash: 1800
-  hulk: 1800
+  transfer-target:
+    # Use the forced-host domain assigned to this backend.
+    # BushSMP example: pwna.cc.cd
+    # UCAHub example: uca.pwna.cc.cd
+    # Daybreak example: daybreak.pwna.cc.cd
+    # 4th+ direct-to-HidenCloud partner example: riely.pwna.cc.cd
+    host: ""
+    port: 25565
 
-ranks:
-  veteran:
-    enabled: true
-    name: Veteran
-    group: veteran
-    permission: superpower.rank.veteran
-    price: 5000.0
-    order: 1
-    duration-bonus: 2
-    benefits:
-      - Timed superpower effects last 2 seconds longer.
-  elite:
-    enabled: true
-    name: Elite
-    group: elite
-    permission: superpower.rank.elite
-    price: 10000.0
-    order: 2
-    duration-bonus: 4
-    benefits:
-      - Timed superpower effects last 4 seconds longer.
-  legend:
-    enabled: true
-    name: Legend
-    group: legend
-    permission: superpower.rank.legend
-    price: 25000.0
-    order: 3
-    duration-bonus: 6
-    benefits:
-      - Timed superpower effects last 6 seconds longer.
+  # Raw TCP peer addresses seen by this backend when PaperProxy connects.
+  # Configure actual backend-observed IPs; do not guess them.
+  # Accepts exact IPs, hostnames, and CIDR ranges (IPv4/IPv6).
+  # If empty, transfers fail closed to prevent loops.
+  trusted-proxy-peers: []
 
-# Replace sample group IDs with the actual LuckPerms group names on BushSMP.
-# The plugin checks that a target group exists before applying the rank or taking money.
-# Keep `group` separate from `permission`; they are not interchangeable.
+  # Direct hostnames that always bypass the transfer (useful for admin access
+  # and for players who need to join without passing through PaperProxy).
+  direct-bypass-hosts: []
+
+  cookie:
+    namespace: "network"
+    key: "origin_server"
+
+  preferences:
+    # New Java players are transferred by default unless they opt out.
+    default-enabled: true
+    file: "autotransfer-preferences.yml"
+
+  debug:
+    log-peer-addresses: false
+
+# Optional NeoCityFilter chat replacement. This module and the replacement
+# itself are both disabled by default. No Redis service is needed.
+chat-filter:
+  enabled: false
+  target: "neocity"
+  replacement: "neosh*tty"
+
+# Optional modules intentionally do not have their gameplay catalogues here.
+# Append your BushSMP-only configuration below, then enable modules.superpowers.
