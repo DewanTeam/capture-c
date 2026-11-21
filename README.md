@@ -81,6 +81,14 @@ Available commands appear only when their corresponding module/configuration is 
 
 DialogEngine menus use [back] for navigation and Close for exit. If DialogEngine is absent, command-based shop fallbacks remain available.
 
+## AnimatedScoreboard to TAB
+
+The old `archive.zip` contained AnimatedScoreboard's active `defaultscoreboard`: BushSMP title, Tokens balance, Jobs, and online count. A TAB header/footer migration template is included at `docs/TAB-header-footer.yml`.
+
+Merge its `header-footer` and `scoreboard.enabled: false` sections into the existing `plugins/TAB/config.yml`; do not replace the whole TAB config. Header/footer is displayed as part of the vanilla player list while the player holds Tab. The old AnimatedScoreboard sidebar is not recreated.
+
+The migrated balance line appends `ᴛᴋ` to `%vault_eco_balance_commas%`. This only changes the TAB display. Spawn Top Money holograms are managed by a separate hologram/leaderboard plugin; that configuration was not present in `archive.zip`, so its dollar-sign formatting has not been changed yet.
+
 ## Build
 
 Use JDK 25 and the checked-in Gradle Wrapper:
