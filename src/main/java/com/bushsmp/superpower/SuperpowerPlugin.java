@@ -29,6 +29,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
+import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -47,7 +49,6 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,15 +67,19 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
 
     private final Map<UUID, String> playerSuperpowers = new ConcurrentHashMap<>();
     private final Map<UUID, String> playerRanks = new ConcurrentHashMap<>();
-    private final Map<UUID, Long> playerCooldowns = new ConcurrentHashMap<>();
+    private final Map<UUID, Map<String, Long>> playerCooldowns = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> fireyShotCooldowns = new ConcurrentHashMap<>();
     private final Map<UUID, Long> fireyActiveUntil = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> fireyTasks = new ConcurrentHashMap<>();
     private final Map<UUID, Long> fallImmunityUntil = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> gravityTasks = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> originalGravity = new ConcurrentHashMap<>();
     private final Set<UUID> arisenEntities = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, BukkitTask> arisenCleanupTasks = new ConcurrentHashMap<>();
 
     private NamespacedKey superpowerItemKey;
+    private NamespacedKey arisenEntityKey;
+    private NamespacedKey arisenExpiresAtKey;
     private Object dialogApi;
     private Class<?> dialogApiType;
 
@@ -83,6 +88,8 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         saveDefaultConfig();
         configManager = new ConfigManager(this);
         superpowerItemKey = new NamespacedKey(this, "superpower_activator");
+        arisenEntityKey = new NamespacedKey(this, "arisen_summon");
+        arisenExpiresAtKey = new NamespacedKey(this, "arisen_expires_at");
 
         if (!setupEconomy()) {
             getLogger().severe("Vault economy provider not found. Install Vault and an economy provider before enabling SuperpowerPlugin.");
@@ -100,7 +107,13 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         setupDialogEngine();
         registerCommands();
         getServer().getPluginManager().registerEvents(this, this);
-        for (Player online : Bukkit.getOnlinePlayers()) syncPlayerRank(online);
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            syncPlayerRank(online);
+            normalizeActivatorItems(online);
+        }
+        for (World world : Bukkit.getWorlds()) {
+            for (org.bukkit.Chunk chunk : world.getLoadedChunks()) cleanupArisenChunk(chunk);
+        }
         getLogger().info("SuperpowerPlugin enabled. Powers: " + configManager.getPowerIds().size()
                 + ", configured rank entries: " + configManager.getRankIds().size());
     }
@@ -110,12 +123,15 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         for (UUID playerId : new ArrayList<>(gravityTasks.keySet())) restoreGravity(playerId);
         for (BukkitTask task : fireyTasks.values()) task.cancel();
         fireyTasks.clear();
+        for (BukkitTask task : arisenCleanupTasks.values()) task.cancel();
+        arisenCleanupTasks.clear();
         for (UUID entityId : new ArrayList<>(arisenEntities)) {
             Entity entity = Bukkit.getEntity(entityId);
             if (entity != null) entity.remove();
         }
         arisenEntities.clear();
         fireyActiveUntil.clear();
+        fireyShotCooldowns.clear();
         savePlayerData();
     }
 
@@ -279,6 +295,8 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
                         .executesPlayer((Player player, CommandArguments args) -> buyPower(player, (String) args.get("power_id"))))
                 .withSubcommand(new CommandAPICommand("dismiss")
                         .executesPlayer((Player player, CommandArguments args) -> dismissPower(player)))
+                .withSubcommand(new CommandAPICommand("reload")
+                        .executesPlayer((Player player, CommandArguments args) -> reloadPluginConfig(player)))
                 .withSubcommand(new CommandAPICommand("item")
                         .executesPlayer((Player player, CommandArguments args) -> giveActivator(player)))
                 .withSubcommand(new CommandAPICommand("giveitem")
@@ -324,8 +342,30 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         return player.isOp() || player.hasPermission("superpower.admin");
     }
 
+    private void reloadPluginConfig(Player player) {
+        if (!isAdmin(player)) {
+            player.sendMessage(color("&cYou do not have permission to reload SuperpowerPlugin."));
+            return;
+        }
+
+        reloadConfig();
+        if (dialogApi != null && dialogApiType != null) {
+            try {
+                dialogApiType.getMethod("reload").invoke(dialogApi);
+            } catch (ReflectiveOperationException exception) {
+                getLogger().log(Level.WARNING, "Configuration was reloaded, but DialogEngine menus could not be refreshed.", exception);
+            }
+        }
+
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            syncPlayerRank(online);
+            normalizeActivatorItems(online);
+        }
+        player.sendMessage(color("&aSuperpowerPlugin configuration and DialogEngine menus reloaded."));
+    }
+
     private void showSuperpowerHelp(Player player) {
-        player.sendMessage(color("&6&lSuperpowers &7- &f/superpower shop &7| &f/superpower buy <power> &7| &f/superpower item &7| &f/superpower dismiss"));
+        player.sendMessage(color("&6&lSuperpowers &7- &f/superpower shop &7| &f/superpower buy <power> &7| &f/superpower item &7| &f/superpower dismiss &7| &f/superpower reload"));
         String current = playerSuperpowers.get(player.getUniqueId());
         player.sendMessage(color("&7Equipped power: &e" + (current == null ? "None" : configManager.getPowerName(current))));
     }
@@ -414,7 +454,32 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         player.sendMessage(color("&aRemoved your &e" + configManager.getPowerName(removed) + " &apower. You can purchase another from /superpower shop."));
     }
 
+    private boolean normalizeActivatorItems(Player player) {
+        boolean kept = false;
+        ItemStack[] storage = player.getInventory().getStorageContents();
+        for (int index = 0; index < storage.length; index++) {
+            if (!isActivator(storage[index])) continue;
+            if (!kept) {
+                kept = true;
+            } else {
+                storage[index] = null;
+            }
+        }
+        player.getInventory().setStorageContents(storage);
+
+        ItemStack offHand = player.getInventory().getItemInOffHand();
+        if (isActivator(offHand)) {
+            if (kept) {
+                player.getInventory().setItemInOffHand(null);
+            } else {
+                kept = true;
+            }
+        }
+        return kept;
+    }
+
     private void giveActivator(Player player) {
+        if (normalizeActivatorItems(player)) return;
         ItemStack item = new ItemStack(Material.DIAMOND);
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return;
@@ -457,7 +522,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        long nextUse = playerCooldowns.getOrDefault(playerId, 0L);
+        long nextUse = getCooldownUntil(playerId, powerId);
         if (nextUse > now) {
             player.sendMessage(color("&cPower cooldown: &e" + Math.max(1, (nextUse - now + 999) / 1000) + "s"));
             return;
@@ -474,7 +539,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
 
         if (!activated) return;
         int cooldown = configManager.getPowerCooldownSeconds(powerId);
-        playerCooldowns.put(playerId, now + cooldown * 1000L);
+        setCooldownUntil(playerId, powerId, now + cooldown * 1000L);
         if (!savePlayerData()) {
             getLogger().warning("Could not persist cooldown for " + playerId + ". The current session can continue, but a restart may reset it.");
         }
@@ -482,31 +547,50 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
     }
 
     /** Firey is a timed mode: right-click launches a harmless particle-only fireball visual. */
+    private long getCooldownUntil(UUID playerId, String powerId) {
+        Map<String, Long> playerEntries = playerCooldowns.get(playerId);
+        if (playerEntries == null) return 0L;
+        return Math.max(
+                playerEntries.getOrDefault(powerId, 0L),
+                playerEntries.getOrDefault("_legacy", 0L)
+        );
+    }
+
+    private void setCooldownUntil(UUID playerId, String powerId, long until) {
+        playerCooldowns.computeIfAbsent(playerId, ignored -> new ConcurrentHashMap<>())
+                .put(powerId, until);
+    }
+
+    /** Firey mode duration/cooldown is separate from its five-second visual-shot interval. */
     private void activateFirey(Player player, int durationSeconds, long now) {
         UUID playerId = player.getUniqueId();
         long activeUntil = fireyActiveUntil.getOrDefault(playerId, 0L);
         boolean starting = activeUntil <= now;
+
         if (starting) {
-            long nextUse = playerCooldowns.getOrDefault(playerId, 0L);
+            long nextUse = getCooldownUntil(playerId, "firey");
             if (nextUse > now) {
                 player.sendMessage(color("&7Firey cooldown: &e" + Math.max(1, (nextUse - now + 999) / 1000) + "s"));
                 return;
             }
+
             fireyActiveUntil.put(playerId, now + durationSeconds * 1000L);
+            setCooldownUntil(playerId, "firey", now + configManager.getPowerCooldownSeconds("firey") * 1000L);
+            if (!savePlayerData()) {
+                getLogger().warning("Could not persist Firey cooldown for " + playerId + ".");
+            }
             startFireyParticles(playerId);
             player.sendMessage(color("&6Firey mode activated for &e" + durationSeconds + " seconds&6. Right-click again to launch a fireball visual."));
         }
 
-        long nextShot = playerCooldowns.getOrDefault(playerId, 0L);
+        long nextShot = fireyShotCooldowns.getOrDefault(playerId, 0L);
         if (nextShot > now) {
             player.sendMessage(color("&7Firey shot cooldown: &e" + Math.max(1, (nextShot - now + 999) / 1000) + "s"));
             return;
         }
 
         launchFireyVisual(player);
-
-        playerCooldowns.put(playerId, now + configManager.getFireyVisualCooldownSeconds() * 1000L);
-        savePlayerData();
+        fireyShotCooldowns.put(playerId, now + configManager.getFireyVisualCooldownSeconds() * 1000L);
         player.sendMessage(color("&6Firey launched a visual fireball. &7Next shot in " + configManager.getFireyVisualCooldownSeconds() + "s."));
     }
 
@@ -602,31 +686,99 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         String tier = configManager.getAriseArmorTier();
         World world = player.getWorld();
         Location center = player.getLocation();
+        long expiresAt = System.currentTimeMillis() + durationSeconds * 1000L;
         int spawned = 0;
+
         for (int index = 0; index < count; index++) {
             double angle = (Math.PI * 2.0D * index) / count;
             Location spawnAt = center.clone().add(Math.cos(angle) * 2.5D, 0, Math.sin(angle) * 2.5D);
             if (!spawnAt.getBlock().isPassable() || !spawnAt.clone().add(0, 1, 0).getBlock().isPassable()) continue;
+
             Entity entity = world.spawnEntity(spawnAt, EntityType.ZOMBIE);
             if (!(entity instanceof Zombie zombie)) {
                 entity.remove();
                 continue;
             }
+
             zombie.setCustomName(color("&5Arisen"));
             zombie.setCustomNameVisible(false);
             zombie.setCanPickupItems(false);
+            zombie.setTarget(null);
+            zombie.getPersistentDataContainer().set(arisenEntityKey, PersistentDataType.BYTE, (byte) 1);
+            zombie.getPersistentDataContainer().set(arisenExpiresAtKey, PersistentDataType.LONG, expiresAt);
+
             if (index < enchantedCount) equipArisenArmor(zombie, tier);
-            UUID entityId = zombie.getUniqueId();
-            arisenEntities.add(entityId);
-            Bukkit.getScheduler().runTaskLater(this, () -> {
-                Entity summoned = Bukkit.getEntity(entityId);
-                if (summoned != null) summoned.remove();
-                arisenEntities.remove(entityId);
-            }, durationSeconds * 20L);
+            scheduleArisenCleanup(zombie, expiresAt);
             spawned++;
         }
+
         player.sendMessage(color("&5Arise summoned &e" + spawned + " &5undead ally/allies for &e" + durationSeconds + " seconds&5."));
         return spawned > 0;
+    }
+
+    private boolean isArisen(Entity entity) {
+        Byte marker = entity.getPersistentDataContainer().get(arisenEntityKey, PersistentDataType.BYTE);
+        return marker != null && marker == (byte) 1;
+    }
+
+    private void scheduleArisenCleanup(Entity entity, long expiresAt) {
+        UUID entityId = entity.getUniqueId();
+        BukkitTask previous = arisenCleanupTasks.remove(entityId);
+        if (previous != null) previous.cancel();
+        arisenEntities.add(entityId);
+
+        long remainingMillis = expiresAt - System.currentTimeMillis();
+        if (remainingMillis <= 0L) {
+            entity.remove();
+            arisenEntities.remove(entityId);
+            return;
+        }
+
+        long delayTicks = Math.max(1L, (remainingMillis + 49L) / 50L);
+        BukkitTask task = Bukkit.getScheduler().runTaskLater(this, () -> {
+            arisenCleanupTasks.remove(entityId);
+            Entity loadedEntity = Bukkit.getEntity(entityId);
+            if (loadedEntity == null) {
+                // Its persistent expiry marker remains on disk. ChunkLoadEvent
+                // will schedule cleanup again or remove it immediately.
+                return;
+            }
+
+            Long storedExpiry = loadedEntity.getPersistentDataContainer()
+                    .get(arisenExpiresAtKey, PersistentDataType.LONG);
+            if (storedExpiry == null || storedExpiry <= System.currentTimeMillis()) {
+                loadedEntity.remove();
+                arisenEntities.remove(entityId);
+            } else {
+                scheduleArisenCleanup(loadedEntity, storedExpiry);
+            }
+        }, delayTicks);
+        arisenCleanupTasks.put(entityId, task);
+    }
+
+    private void cleanupArisenChunk(org.bukkit.Chunk chunk) {
+        long now = System.currentTimeMillis();
+        for (Entity entity : chunk.getEntities()) {
+            if (!isArisen(entity)) continue;
+            Long expiresAt = entity.getPersistentDataContainer().get(arisenExpiresAtKey, PersistentDataType.LONG);
+            if (expiresAt == null || expiresAt <= now) {
+                entity.remove();
+                arisenEntities.remove(entity.getUniqueId());
+            } else {
+                scheduleArisenCleanup(entity, expiresAt);
+            }
+        }
+    }
+
+    @EventHandler
+    public void onArisenTarget(EntityTargetLivingEntityEvent event) {
+        if (!(event.getEntity() instanceof Zombie zombie) || !(event.getTarget() instanceof Player)) return;
+        if (isArisen(zombie)) event.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onChunkLoad(ChunkLoadEvent event) {
+        cleanupArisenChunk(event.getChunk());
     }
 
     private void equipArisenArmor(Zombie zombie, String tier) {
@@ -672,6 +824,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         syncPlayerRank(event.getPlayer());
+        normalizeActivatorItems(event.getPlayer());
     }
 
     private void syncPlayerRank(Player player) {
@@ -725,6 +878,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         UUID playerId = event.getPlayer().getUniqueId();
         restoreGravity(playerId);
         fireyActiveUntil.remove(playerId);
+        fireyShotCooldowns.remove(playerId);
         BukkitTask fireyTask = fireyTasks.remove(playerId);
         if (fireyTask != null) fireyTask.cancel();
         fallImmunityUntil.remove(playerId);
@@ -781,15 +935,32 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         YamlConfiguration data = YamlConfiguration.loadConfiguration(file);
         loadUuidStringMap(data.getConfigurationSection("superpowers"), playerSuperpowers);
         loadUuidStringMap(data.getConfigurationSection("ranks"), playerRanks);
+
         ConfigurationSection cooldowns = data.getConfigurationSection("cooldowns");
-        if (cooldowns != null) {
-            for (String key : cooldowns.getKeys(false)) {
-                try {
-                    long until = cooldowns.getLong(key, 0L);
-                    if (until > System.currentTimeMillis()) playerCooldowns.put(UUID.fromString(key), until);
-                } catch (IllegalArgumentException exception) {
-                    getLogger().warning("Ignoring invalid UUID in cooldown storage: " + key);
-                }
+        if (cooldowns == null) return;
+
+        long now = System.currentTimeMillis();
+        for (String playerKey : cooldowns.getKeys(false)) {
+            UUID playerId;
+            try {
+                playerId = UUID.fromString(playerKey);
+            } catch (IllegalArgumentException exception) {
+                getLogger().warning("Ignoring invalid UUID in cooldown storage: " + playerKey);
+                continue;
+            }
+
+            ConfigurationSection perPower = cooldowns.getConfigurationSection(playerKey);
+            if (perPower == null) {
+                // Older builds stored one global timestamp per player. Preserve
+                // any still-active cooldown as a temporary legacy floor.
+                long legacyUntil = cooldowns.getLong(playerKey, 0L);
+                if (legacyUntil > now) setCooldownUntil(playerId, "_legacy", legacyUntil);
+                continue;
+            }
+
+            for (String powerId : perPower.getKeys(false)) {
+                long until = perPower.getLong(powerId, 0L);
+                if (until > now) setCooldownUntil(playerId, powerId, until);
             }
         }
     }
@@ -816,9 +987,9 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         playerSuperpowers.forEach((uuid, power) -> data.set("superpowers." + uuid, power));
         playerRanks.forEach((uuid, rank) -> data.set("ranks." + uuid, rank));
         long now = System.currentTimeMillis();
-        playerCooldowns.forEach((uuid, until) -> {
-            if (until > now) data.set("cooldowns." + uuid, until);
-        });
+        playerCooldowns.forEach((uuid, powerEntries) -> powerEntries.forEach((powerId, until) -> {
+            if (until > now) data.set("cooldowns." + uuid + "." + powerId, until);
+        }));
         try {
             data.save(new File(getDataFolder(), "players.yml"));
             return true;
@@ -828,8 +999,8 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    private static String formatMoney(double amount) {
-        return new DecimalFormat("#,##0.##").format(amount);
+    private String formatMoney(double amount) {
+        return configManager.formatCurrency(amount);
     }
 
     private static String color(String text) {
