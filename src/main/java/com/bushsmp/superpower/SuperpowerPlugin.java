@@ -965,7 +965,15 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
                 // Older builds stored one global timestamp per player. Preserve
                 // any still-active cooldown as a temporary legacy floor.
                 long legacyUntil = cooldowns.getLong(playerKey, 0L);
-                if (legacyUntil > now) setCooldownUntil(playerId, "_legacy", legacyUntil);
+                String previouslyEquippedPower = playerSuperpowers.get(playerId);
+                // Older releases shared one cooldown across every power. Migrate
+                // it only to the power that was equipped when the old data saved.
+                // A dismissed player has no way to identify which power owned it,
+                // so discard that ambiguous legacy timestamp rather than blocking
+                // every newly purchased power.
+                if (legacyUntil > now && previouslyEquippedPower != null) {
+                    setCooldownUntil(playerId, previouslyEquippedPower, legacyUntil);
+                }
                 continue;
             }
 
