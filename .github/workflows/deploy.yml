@@ -59,13 +59,15 @@ jobs:
           ./gradlew --version
 
       - name: Build plugin
-        run: ./gradlew --no-daemon clean build
+        run: ./gradlew --no-daemon clean :manager:clean build
 
       - name: Upload plugin JAR artifact
         uses: actions/upload-artifact@v7
         with:
           name: SuperpowerPlugin
-          path: build/libs/SuperpowerPlugin.jar
+          path: |
+            build/libs/SuperpowerPlugin.jar
+            manager/build/libs/ANOBank-PaperProxy-Manager.jar
           if-no-files-found: error
           retention-days: 14
 
@@ -91,18 +93,14 @@ jobs:
     env:
       SFTP_HOST: ${{ secrets.SFTP_HOST }}
     steps:
-      - name: Download the tested plugin JAR
-        uses: actions/download-artifact@v8
-        with:
-          name: SuperpowerPlugin
-          path: dist
-
       - name: Publish rolling GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: latest
           name: Latest Build
-          files: dist/SuperpowerPlugin.jar
+          files: |
+            build/libs/SuperpowerPlugin.jar
+            manager/build/libs/ANOBank-PaperProxy-Manager.jar
           make_latest: true
 
       - name: Deploy plugin JAR to Purpur server over SFTP
@@ -126,6 +124,26 @@ jobs:
           set sftp:auto-confirm yes
           mkdir -p "$TARGET"
           cd "$TARGET"
-          put "dist/SuperpowerPlugin.jar" -o "SuperpowerPlugin.jar"
+          put "build/libs/SuperpowerPlugin.jar" -o "SuperpowerPlugin.jar"
+          bye
+          EOF
+
+      - name: Optionally upload standalone manager JAR to HidenCloud
+        if: env.SFTP_HOST != '' && secrets.SFTP_MANAGER_TARGET_DIR != ''
+        env:
+          SFTP_HOST: ${{ secrets.SFTP_HOST }}
+          SFTP_PORT: ${{ secrets.SFTP_PORT }}
+          SFTP_USER: ${{ secrets.SFTP_USER }}
+          SFTP_PASS: ${{ secrets.SFTP_PASS }}
+          SFTP_MANAGER_TARGET_DIR: ${{ secrets.SFTP_MANAGER_TARGET_DIR }}
+        shell: bash
+        run: |
+          PORT="${SFTP_PORT:-22}"
+          lftp -u "$SFTP_USER","$SFTP_PASS" -p "$PORT" "sftp://$SFTP_HOST" <<EOF
+          set cmd:fail-exit yes
+          set sftp:auto-confirm yes
+          mkdir -p "$SFTP_MANAGER_TARGET_DIR"
+          cd "$SFTP_MANAGER_TARGET_DIR"
+          put "manager/build/libs/ANOBank-PaperProxy-Manager.jar" -o "ANOBank-PaperProxy-Manager.jar"
           bye
           EOF
