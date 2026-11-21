@@ -120,6 +120,7 @@ public final class SuperpowerPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        if (rankService != null) rankService.shutdown();
         for (UUID playerId : new ArrayList<>(gravityTasks.keySet())) restoreGravity(playerId);
         for (BukkitTask task : fireyTasks.values()) task.cancel();
         fireyTasks.clear();
