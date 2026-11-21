@@ -997,4 +997,7 @@ public final class ManagerMain {
       try(var stream=Files.list(dir)) { return stream.filter(p->p.getFileName().toString().startsWith(jar.getFileName()+".") && p.toString().endsWith(".bak") && Files.isRegularFile(p, NOFOLLOW_LINKS)).max(Comparator.comparingLong(p->p.toFile().lastModified())).orElse(null); }
     }
     synchronized String statusJson() {
-      boolean running=process != null && process.isAlive(); long pid=running?process.pid():-1;
+      boolean running=process != null && process.isAlive(); long pid=running?process.pid():-1;      return "{\"id\":"+quote(id)+",\"running\":"+running+",\"desiredRunning\":"+desiredRunning+",\"autoRestart\":"+autoRestart+",\"pid\":"+(running?pid:"null")+",\"jar\":"+quote(jar.getFileName().toString())+",\"cwd\":"+quote(cwd.toString())+",\"startedAt\":"+(startedAt==null?"null":quote(startedAt.toString()))+",\"lastError\":"+quote(lastError)+"}";
+    }
+  }
+}
