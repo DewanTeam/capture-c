@@ -66,8 +66,8 @@ jobs:
         with:
           name: SuperpowerPlugin
           path: |
-            build/libs/SuperpowerPlugin.jar
-            manager/build/libs/ANOBank-PaperProxy-Manager.jar
+            dist/build/libs/SuperpowerPlugin.jar
+            dist/manager/build/libs/ANOBank-PaperProxy-Manager.jar
           if-no-files-found: error
           retention-days: 14
 
@@ -92,7 +92,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SFTP_HOST: ${{ secrets.SFTP_HOST }}
+      SFTP_MANAGER_TARGET_DIR: ${{ secrets.SFTP_MANAGER_TARGET_DIR }}
     steps:
+      - name: Download the tested JARs
+        uses: actions/download-artifact@v8
+        with:
+          name: SuperpowerPlugin
+          path: dist
+
       - name: Publish rolling GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -124,12 +131,12 @@ jobs:
           set sftp:auto-confirm yes
           mkdir -p "$TARGET"
           cd "$TARGET"
-          put "build/libs/SuperpowerPlugin.jar" -o "SuperpowerPlugin.jar"
+          put "dist/build/libs/SuperpowerPlugin.jar" -o "SuperpowerPlugin.jar"
           bye
           EOF
 
       - name: Optionally upload standalone manager JAR to HidenCloud
-        if: env.SFTP_HOST != '' && secrets.SFTP_MANAGER_TARGET_DIR != ''
+        if: env.SFTP_HOST != '' && env.SFTP_MANAGER_TARGET_DIR != ''
         env:
           SFTP_HOST: ${{ secrets.SFTP_HOST }}
           SFTP_PORT: ${{ secrets.SFTP_PORT }}
@@ -144,6 +151,6 @@ jobs:
           set sftp:auto-confirm yes
           mkdir -p "$SFTP_MANAGER_TARGET_DIR"
           cd "$SFTP_MANAGER_TARGET_DIR"
-          put "manager/build/libs/ANOBank-PaperProxy-Manager.jar" -o "ANOBank-PaperProxy-Manager.jar"
+          put "dist/manager/build/libs/ANOBank-PaperProxy-Manager.jar" -o "ANOBank-PaperProxy-Manager.jar"
           bye
           EOF
