@@ -1,56 +1,100 @@
-# SuperpowerPlugin
+# SuperpowerPlugin — Universal Paper/Purpur + PaperProxy JAR
 
-Paper/Purpur plugin for Java 25, targeting Paper 26.3 and Purpur 26.1.2+ (the minimum supported API baseline is 26.1.2).
+One Java 25 JAR contains both platform entrypoints:
 
-## Implemented systems
+- Paper/Purpur backend: optional family auto-transfer, optional NeoCityFilter chat replacement, and opt-in Superpower/RankShop.
+- Velocity/PaperProxy companion: requests the native transfer cookie and routes the player to an approved origin backend.
+- The HidenCloud process manager/multiplexer remains a separate standalone JAR.
 
-- Vault economy purchases for the configured six-power catalogue.
-- A single PDC-marked Superpower Activator item; duplicate marked activators are normalized, and the diamond is not consumed on use.
-- LuckPerms-backed rank purchases and gifts, including configured rank upgrades. The default LuckPerms group is not treated as a paid rank; paid rank ownership is determined from configured rank groups.
-- Rank assignment is attempted and saved before Vault withdraws money. If payment fails, the LuckPerms change is rolled back. Transactions are serialized per payer/recipient and recorded in `transactions.yml`.
-- UUID-based player power, rank and per-power cooldown persistence in `players.yml`; legacy shared cooldown data is read during migration.
-- Configurable timed power effects and the confirmed rank duration progression: base 30 seconds, then +2/+4/+6 seconds for the three sample rank tiers. Arise summons ignore player targets and retain persistent expiry markers so unloaded chunks are cleaned when they load.
-- Firey is implemented as a particle-only fireball visual with a separate five-second shot interval; it does not create damaging projectiles or alter blocks. Dismissing a power does not erase that power's cooldown.
-- DialogEngine menus shipped under `src/main/resources/dialogs/shop.yml`, registered dynamically through the DialogEngine 0.8.x API. The G launcher opens a rank shop and superpower shop on supported clients.
+## Compatibility
 
-## Required server plugins
+- Java 25.
+- Paper/Purpur API baseline 26.1.2+; built against Paper API 26.1.2.
+- Velocity/PaperProxy API baseline 3.4.0.
+- ViaVersion and ViaBackwards remain proxy-side dependencies.
+- The setup is designed to keep player-info-forwarding-mode set to none.
 
-- Vault and a Vault economy provider (the supplied server log showed EssentialsX Economy hooked through Vault).
-- LuckPerms 5.5 or compatible.
-- CommandAPI 12.x. CommandAPI was not present in the supplied server startup log, so install it before this plugin.
-- DialogEngine 0.8.x is optional for command functionality but required for the native dialogs and G Quick Actions.
-- PlaceholderAPI is not required by this implementation; DialogEngine placeholders are registered by this plugin.
+Both platform descriptors are packaged in the same JAR: paper-plugin.yml and the generated velocity-plugin.json. This build has passed GitHub Actions compilation and archive inspection, but still needs live testing on your exact PaperProxy and Purpur servers.
 
-Native DialogEngine dialogs and Quick Actions require a supported Minecraft client (1.21.6+ per DialogEngine documentation). The server needs DialogEngine 1.21.7+; Purpur 26.1.2 meets that server minimum.
+## Backend setup
 
-## Commands
+1. Put SuperpowerPlugin.jar in the backend plugins folder.
+2. Start once to generate plugins/SuperpowerPlugin/config.yml.
+3. All optional modules default to disabled.
+4. To enable family routing, set modules.family-routing.enabled to true and fill in family-routing.server-id, family-routing.transfer-target, trusted-proxy-peers, and direct-bypass-hosts.
 
-- `/rankshop` — open the rank shop (or show command fallback when DialogEngine is absent).
-- `/rankshop buy <rank_id>` — purchase an explicitly selected rank.
-- `/rankshop gift <online_player> <rank_id>` — gift a rank to an online player.
-- `/rankshop benefits` — show configured benefits.
-- `/superpower` — open the G-launcher menu or show command help.
-- `/superpower shop` — open/list the power shop.
-- `/superpower buy <power_id>` — buy a configured power.
-- `/superpower item` — give yourself the PDC-marked activator.
-- `/superpower dismiss` — remove your current power without resetting its cooldown.
-- `/superpower reload` — reload `config.yml` and the DialogEngine menus (admin/operator only).
-- `/superpower giveitem <online_player>` — operator/admin utility to give an activator.
+Example UCAHub settings (replace the peer placeholder with the actual raw TCP peer address observed by UCAHub):
 
-## Configure before a real purchase test
+    modules:
+      family-routing:
+        enabled: true
+    family-routing:
+      server-id: ucahub
+      transfer-target:
+        host: uca.pwna.cc.cd
+        port: 25565
+      trusted-proxy-peers:
+        - REPLACE_WITH_BACKEND_OBSERVED_PROXY_IP
+      direct-bypass-hosts:
+        - direct.ucahub.mysrv.us
 
-`config.yml` deliberately marks the current sample ranks (`veteran`, `elite`, `legend`) and sample prices as provisional. The WhatsApp text did not confirm the final names, prices, perks or LuckPerms group IDs. The three sample `group` values currently match their sample IDs; make sure those groups exist in LuckPerms or edit the values before enabling purchases. The plugin checks the target group exists before assigning it or taking money.
+Accepted trusted-proxy-peers values are exact IPs, hostnames, and IPv4/IPv6 CIDR ranges. If the list is empty, automatic transfer fails closed to prevent loops. Temporarily enable family-routing.debug.log-peer-addresses to see the peer address your backend actually receives.
 
-Only the duration bonus is confirmed by Dead Bush's 20 November instruction: default timed power duration 30 seconds, +2 seconds for the first rank, +4 for the second, +6 for the top sample rank. Additional rank perks should be added only after Dead Bush supplies their actual list.
+Family routing runs at Paper's initial configuration connection event, before the ordinary join/login flow. Floodgate players are ignored. The backend stores its server ID in a transfer cookie; the cookie is only a routing hint and is not authentication.
 
-The gift form currently requires the recipient to be online. Offline gifting is not enabled in this first implementation because the command and confirmation flow resolve the recipient through Bukkit's online-player cache.
+The direct-bypass-hosts setting is useful for a direct hostname that should never auto-transfer, such as a staff/admin endpoint.
+
+## PaperProxy setup
+
+Put the same SuperpowerPlugin.jar in PaperProxy's plugins folder. Start once to generate plugins/SuperpowerPlugin/config.properties, then set origin-router.enabled=true. Its cookie namespace/key must match the backend settings. allowed-servers must contain exact backend names from velocity.toml.
+
+Example proxy config:
+
+    origin-router.enabled=true
+    cookie.namespace=network
+    cookie.key=origin_server
+    cookie.request-timeout-ms=1500
+    fallback-server=bushsmp
+    allowed-servers=bushsmp,ucahub,daybreak,riely
+    log.cookie-decisions=true
+
+If no valid origin cookie arrives, the proxy preserves its normal initial server/fallback. Cookie values are matched only against the explicit allowed-servers list. No Redis service or shared Redis secret is required.
+
+## Optional NeoCityFilter
+
+The module and filter are disabled by default. Enable modules.neocity-filter.enabled and chat-filter.enabled, then set chat-filter.target and chat-filter.replacement. This is the lightweight chat text replacement only; the previous Redis ticket handoff and Bedrock auto-login feature are not automatically enabled.
+
+## Optional Superpowers and RankShop
+
+The generated default config intentionally contains no power catalogue or rank catalogue. This prevents installing the universal plugin on partner backends from activating Superpowers accidentally.
+
+On BushSMP only, set modules.superpowers.enabled to true and append the required superpowers, cooldowns, economy, and/or ranks configuration sections. Vault plus an economy provider is required for purchases; LuckPerms is required when ranks are configured; CommandAPI 12.x is required for these command modules. DialogEngine 0.8.x is optional and provides native dialogs and the G Quick Action launcher.
+
+The ᴛᴋ currency symbol is configured with economy.currency-symbol in the BushSMP-only configuration. The sample rank names, prices, group IDs, and additional perks are provisional until Dead Bush confirms the final catalogue. The confirmed duration progression is 30 seconds base, then +2/+4/+6 seconds for the three sample ranks.
+
+Available commands appear only when their corresponding module/configuration is active:
+
+- /autotransfer, /autotransfer on, /autotransfer off, /autotransfer toggle, /autotransfer status.
+- /superpower, /superpower shop, /superpower buy <power_id>, /superpower dismiss, /superpower item, /superpower reload.
+- /rankshop, /rankshop buy <rank_id>, /rankshop gift <online_player> <rank_id>, /rankshop benefits.
+- /superpower gift <online_player> <rank_id> is registered only when both the Superpower and RankShop modules are configured.
+
+DialogEngine menus use [back] for navigation and Close for exit. If DialogEngine is absent, command-based shop fallbacks remain available.
 
 ## Build
 
-Use JDK 25 and the Gradle 9.9.2 wrapper:
+Use JDK 25 and the checked-in Gradle Wrapper:
 
-```bash
-./gradlew --no-daemon clean build
-```
+    ./gradlew --no-daemon clean build
 
-The JAR is emitted as `build/libs/SuperpowerPlugin.jar`. Displayed balances use the configured `economy.currency-symbol` (default `ᴛᴋ`).
+The universal plugin output is build/libs/SuperpowerPlugin.jar. The single repository workflow builds with the wrapper and only publishes/deploys from main; feature and pull-request builds are build-only.
+
+## Live-test checklist
+
+1. Start PaperProxy with the JAR while origin routing is disabled.
+2. Start one test backend with family routing enabled and a verified trusted-proxy-peers entry.
+3. Verify direct-bypass host and Floodgate bypass.
+4. Verify cookie routing for every forced-host destination and fallback routing when no cookie exists.
+5. Enable Superpowers on BushSMP only, after confirming the economy provider and LuckPerms group catalogue.
+
+The separate HidenCloud manager/multiplexer is not part of this plugin JAR. Its PROXY-v2/CIDR normalisation, single-file command journal, and companion-plugin updater are separate manager tasks.
