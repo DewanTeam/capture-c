@@ -66,7 +66,7 @@ public final class RankService {
             return;
         }
         if (!economy.has(buyer, price)) {
-            buyer.sendMessage(color("&cYou do not have enough money. &7Price: &e" + format(price) + " coins"));
+            buyer.sendMessage(color("&cYou do not have enough money. &7Price: &e" + format(price)));
             return;
         }
 
@@ -139,8 +139,8 @@ public final class RankService {
                     release(buyerId, recipientId);
                     String rankName = color(config.getRankName(rankId));
                     String success = gift
-                            ? "&aYou gifted " + rankName + " &ato &e" + recipient.getName() + "&a for &e" + format(price) + " coins."
-                            : "&aYou purchased " + rankName + " &afor &e" + format(price) + " coins.";
+                            ? "&aYou gifted " + rankName + " &ato &e" + recipient.getName() + "&a for &e" + format(price) + "."
+                            : "&aYou purchased " + rankName + " &afor &e" + format(price) + ".";
                     buyer.sendMessage(color(success));
                     if (gift) {
                         recipient.sendMessage(color("&aYou received the " + rankName + " &arank from &e" + buyer.getName() + "&a!"));
@@ -289,8 +289,8 @@ public final class RankService {
         return current;
     }
 
-    private static String format(double value) {
-        return value == Math.rint(value) ? String.format(Locale.US, "%.0f", value) : String.format(Locale.US, "%.2f", value);
+    private String format(double value) {
+        return config.formatCurrency(value);
     }
 
     private static String color(String text) {
