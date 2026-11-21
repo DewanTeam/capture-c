@@ -28,6 +28,8 @@ public final class RankService {
     private final Economy economy;
     private final LuckPerms luckPerms;
     private final Set<UUID> lockedPlayers = ConcurrentHashMap.newKeySet();
+    private final Map<UUID, RankChange> pendingAppliedChanges = new ConcurrentHashMap<>();
+    private volatile boolean shuttingDown;
 
     public RankService(SuperpowerPlugin plugin, ConfigManager config, Economy economy, LuckPerms luckPerms) {
         this.plugin = plugin;
@@ -85,14 +87,45 @@ public final class RankService {
         }
 
         buyer.sendMessage(color("&7Checking LuckPerms and applying &e" + config.getRankName(rankId) + "&7..."));
-        applyRank(recipientId, rankId, groupName).whenComplete((change, error) ->
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    if (error != null) {
+        applyRank(recipientId, rankId, groupName).whenComplete((change, error) -> {
+            if (error != null) {
+                if (shuttingDown || !plugin.isEnabled()) {
+                    release(buyerId, recipientId);
+                    plugin.getLogger().log(Level.WARNING,
+                            "Rank assignment completed with an error while the plugin was shutting down for " + recipientId,
+                            unwrap(error));
+                    return;
+                }
+                try {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
                         release(buyerId, recipientId);
                         buyer.sendMessage(color("&cThe rank could not be applied. No money was taken. &7Check that the LuckPerms group '" + groupName + "' exists and that this is an upgrade."));
                         plugin.getLogger().log(Level.WARNING, "Failed to apply LuckPerms rank " + rankId + " to " + recipientId, unwrap(error));
+                    });
+                } catch (RuntimeException schedulingError) {
+                    plugin.getLogger().log(Level.WARNING,
+                            "Could not schedule rank-failure feedback because the plugin is shutting down.",
+                            schedulingError);
+                }
+                return;
+            }
+
+            // Keep the saved LuckPerms mutation visible to onDisable until the
+            // economy and transaction record are committed on the main thread.
+            pendingAppliedChanges.put(recipientId, change);
+            if (shuttingDown || !plugin.isEnabled()) {
+                rollbackPendingAfterShutdown(recipientId, change);
+                return;
+            }
+
+            try {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (shuttingDown || !plugin.isEnabled()) {
+                        rollbackPendingAfterShutdown(recipientId, change);
                         return;
                     }
+                    // If shutdown already claimed this mutation, never charge.
+                    if (!pendingAppliedChanges.remove(recipientId, change)) return;
 
                     OfflinePlayer payer = Bukkit.getOfflinePlayer(buyerId);
                     EconomyResponse response = economy.withdrawPlayer(payer, price);
@@ -148,7 +181,36 @@ public final class RankService {
                     } else {
                         buyer.sendMessage(color("&7This rank adds &e+" + config.getRankDurationBonus(rankId) + " seconds &7to timed superpower effects."));
                     }
-                }));
+                });
+            } catch (RuntimeException schedulingError) {
+                plugin.getLogger().log(Level.WARNING,
+                        "Could not schedule the economy step for rank " + rankId + "; rolling the LuckPerms change back.",
+                        schedulingError);
+                rollbackPendingAfterShutdown(recipientId, change);
+            }
+        });
+    }
+
+    /** Prevents a saved LuckPerms change from being left unpaid if shutdown interrupts the main-thread callback. */
+    public void shutdown() {
+        shuttingDown = true;
+        for (Map.Entry<UUID, RankChange> entry : pendingAppliedChanges.entrySet()) {
+            rollbackPendingAfterShutdown(entry.getKey(), entry.getValue());
+        }
+    }
+
+    private void rollbackPendingAfterShutdown(UUID recipientId, RankChange change) {
+        if (!pendingAppliedChanges.remove(recipientId, change)) return;
+        rollback(change).whenComplete((ignored, rollbackError) -> {
+            if (rollbackError != null) {
+                plugin.getLogger().log(Level.SEVERE,
+                        "Could not roll back an unpaid rank assignment during shutdown for " + recipientId,
+                        unwrap(rollbackError));
+            } else {
+                plugin.getLogger().warning(
+                        "Rolled back an unpaid rank assignment because SuperpowerPlugin was shutting down for " + recipientId);
+            }
+        });
     }
 
     private CompletableFuture<RankChange> applyRank(UUID userId, String rankId, String groupName) {
