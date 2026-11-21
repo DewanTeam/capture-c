@@ -9,7 +9,7 @@ launcher:
     label: "BushSMP Menu"
   body:
     - "<gray>Welcome to the server menu. Choose a shop below."
-    - "<gray>Your balance: <green>{superpower_balance}</green> ᴛᴋ"
+    - "<gray>Your balance: <green>{superpower_balance}</green>"
     - "<gray>Current rank: <aqua>{superpower_rank}</aqua>"
     - "<gray>Current power: <light_purple>{superpower_power}</light_purple>"
   columns: 2
@@ -34,12 +34,12 @@ launcher:
 rankshop:
   title: "<gold><bold>BushSMP Rank Shop"
   body:
-    - "<gray>Balance: <green>{superpower_balance}</green> ᴛᴋ"
+    - "<gray>Balance: <green>{superpower_balance}</green>"
     - "<gray>Choose a rank to inspect its price and duration bonus."
     - "<dark_gray>Names, prices and LuckPerms groups are editable sample defaults pending Dead Bush's final rank list."
   buttons:
     - for-each: superpower_ranks
-      label: "<yellow>{row.name} <dark_gray>- <green>{row.price} ᴛᴋ"
+      label: "<yellow>{row.name} <dark_gray>- <green>{row.price}"
       tooltip: "{row.duration} timed power duration bonus"
       actions:
         - "[open] superpower:rank_detail rank_id={row.id}"
@@ -50,13 +50,13 @@ rankshop:
       actions:
         - "[back]"
   exit:
-    label: "Back"
+    label: "Close"
 
 rank_detail:
   title: "<gold><bold>Rank Details"
   body:
     - "<white>Rank: <yellow>{superpower_rank_name}"
-    - "<white>Price: <green>{superpower_rank_price}</green> ᴛᴋ"
+    - "<white>Price: <green>{superpower_rank_price}</green>"
     - "<white>LuckPerms group: <aqua>{superpower_rank_group}"
     - "<white>Timed power bonus: <aqua>{superpower_rank_duration}"
     - "<white>Benefits: <gray>{superpower_rank_benefits}"
@@ -70,14 +70,14 @@ rank_detail:
       actions:
         - "[back]"
   exit:
-    label: "Back"
+    label: "Close"
 
 rank_confirm:
   title: "<yellow><bold>Confirm Rank Purchase"
   type: confirmation
   body:
     - "<white>You selected: <yellow>{superpower_rank_name}"
-    - "<white>Cost: <green>{superpower_rank_price}</green> ᴛᴋ"
+    - "<white>Cost: <green>{superpower_rank_price}</green>"
     - "<white>Duration bonus: <aqua>{superpower_rank_duration}"
     - "<red>Do not confirm unless this is the rank you selected."
   confirm:
@@ -117,7 +117,7 @@ rank_gift:
       actions:
         - "[back]"
   exit:
-    label: "Back"
+    label: "Close"
 
 rank_gift_confirm:
   title: "<yellow><bold>Confirm Rank Gift"
@@ -125,7 +125,7 @@ rank_gift_confirm:
   body:
     - "<white>Recipient: <aqua>{recipient}"
     - "<white>Rank: <yellow>{superpower_rank_name}"
-    - "<white>Cost: <green>{superpower_rank_price}</green> ᴛᴋ"
+    - "<white>Cost: <green>{superpower_rank_price}</green>"
     - "<red>The player must still be online when you confirm."
   confirm:
     label: "<green>Confirm Gift"
@@ -152,16 +152,16 @@ rank_benefits:
       actions:
         - "[back]"
   exit:
-    label: "Back"
+    label: "Close"
 
 power_shop:
   title: "<light_purple><bold>Superpower Shop"
   body:
-    - "<gray>Balance: <green>{superpower_balance}</green> ᴛᴋ"
+    - "<gray>Balance: <green>{superpower_balance}</green>"
     - "<gray>Choose a power to review before purchasing."
   buttons:
     - for-each: superpower_powers
-      label: "<light_purple>{row.name} <dark_gray>- <green>{row.price} ᴛᴋ"
+      label: "<light_purple>{row.name} <dark_gray>- <green>{row.price}"
       tooltip: "{row.description}"
       actions:
         - "[open] superpower:power_detail power_id={row.id}"
@@ -169,13 +169,13 @@ power_shop:
       actions:
         - "[back]"
   exit:
-    label: "Back"
+    label: "Close"
 
 power_detail:
   title: "<light_purple><bold>Superpower Details"
   body:
     - "<white>Power: <light_purple>{superpower_power_name}"
-    - "<white>Price: <green>{superpower_power_price}</green> ᴛᴋ"
+    - "<white>Price: <green>{superpower_power_price}</green>"
     - "<gray>{superpower_power_description}"
     - "<dark_gray>Timed effects receive your configured rank duration bonus."
   buttons:
@@ -186,14 +186,14 @@ power_detail:
       actions:
         - "[back]"
   exit:
-    label: "Back"
+    label: "Close"
 
 power_confirm:
   title: "<yellow><bold>Confirm Superpower Purchase"
   type: confirmation
   body:
     - "<white>Power: <light_purple>{superpower_power_name}"
-    - "<white>Cost: <green>{superpower_power_price}</green> ᴛᴋ"
+    - "<white>Cost: <green>{superpower_power_price}</green>"
   confirm:
     label: "<green>Confirm Purchase"
     actions:
