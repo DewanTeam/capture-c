@@ -1,44 +1,66 @@
-superpowers:
-  magneto:
-    enabled: true
-    price: 5000
-    description: "Hover/levitate 5 blocks above ground"
-  firey:
-    enabled: true
-    price: 8000
-    description: "Shoot fireballs with 5s cooldown"
-  frozen:
-    enabled: true
-    price: 6000
-    description: "Freeze players in radius"
-    radius: 10
-    duration: 3
-  arise:
-    enabled: true
-    price: 15000
-    description: "Summon 20 undead mobs"
-    mob-count: 20
-    enchanted-count: 7
-    armor-tier: NETHERITE
-  flash:
-    enabled: true
-    price: 4000
-    description: "Speed amplifier 19 for 30s"
-  hulk:
-    enabled: true
-    price: 7000
-    description: "Jump Boost V + Strength II + Fall damage immunity"
-    duration: 30
+# SuperpowerPlugin universal backend configuration.
+# All optional gameplay/network modules are OFF until explicitly enabled.
+#
+# Family routing can be enabled on a backend after server-id, transfer-target,
+# trusted-proxy-peers and direct-bypass-hosts have been configured.
+#
+# Superpowers/RankShop are intentionally absent from the generated defaults.
+# To enable them on BushSMP only:
+#   1. Set modules.superpowers.enabled: true
+#   2. Add the superpowers:, cooldowns:, economy: and/or ranks: sections below.
+#   3. Install Vault + an economy provider; install LuckPerms for ranks;
+#      install CommandAPI 12.x for the Superpower/RankShop commands.
+# Sample prices/rank names should be confirmed with Dead Bush before purchases.
 
-cooldowns:
-  default: 1800
-  fireball: 5
+modules:
+  family-routing:
+    enabled: false
+  neocity-filter:
+    enabled: false
+  superpowers:
+    enabled: false
 
-messages:
-  purchase-success: "&aYou purchased &6{superpower}&a! Use your Superpower diamond to activate."
-  purchase-no-money: "&cYou don't have enough money! &7Price: &6{price}"
-  already-owned: "&cYou already own a superpower! Use /superpower dismiss to remove it."
-  cooldown-remaining: "&cYou are on cooldown for &6{time}&c. Try again later."
-  no-superpower: "&cYou don't own a superpower!"
-  dismiss-success: "&aYour superpower has been dismissed."
-  activate-success: "&aYour superpower &6{superpower}&a is now active!"
+family-routing:
+  # Unique matching [servers] name from this backend in velocity.toml.
+  server-id: "SET_ME"
+
+  transfer-target:
+    # Use the forced-host domain assigned to this backend.
+    # BushSMP example: pwna.cc.cd
+    # UCAHub example: uca.pwna.cc.cd
+    # Daybreak example: daybreak.pwna.cc.cd
+    # 4th+ direct-to-HidenCloud partner example: riely.pwna.cc.cd
+    host: ""
+    port: 25565
+
+  # Raw TCP peer addresses seen by this backend when PaperProxy connects.
+  # Configure actual backend-observed IPs; do not guess them.
+  # Accepts exact IPs, hostnames, and CIDR ranges (IPv4/IPv6).
+  # If empty, transfers fail closed to prevent loops.
+  trusted-proxy-peers: []
+
+  # Direct hostnames that always bypass the transfer (useful for admin access
+  # and for players who need to join without passing through PaperProxy).
+  direct-bypass-hosts: []
+
+  cookie:
+    namespace: "network"
+    key: "origin_server"
+
+  preferences:
+    # New Java players are transferred by default unless they opt out.
+    default-enabled: true
+    file: "autotransfer-preferences.yml"
+
+  debug:
+    log-peer-addresses: false
+
+# Optional NeoCityFilter chat replacement. This module and the replacement
+# itself are both disabled by default. No Redis service is needed.
+chat-filter:
+  enabled: false
+  target: "neocity"
+  replacement: "neosh*tty"
+
+# Optional modules intentionally do not have their gameplay catalogues here.
+# Append your BushSMP-only configuration below, then enable modules.superpowers.

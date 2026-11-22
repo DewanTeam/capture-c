@@ -1,0 +1,205 @@
+# DialogEngine 0.8.x menu set for SuperpowerPlugin.
+# This file is copied to plugins/SuperpowerPlugin/dialogs/ and registered as
+# the `superpower` namespace. Dynamic lists and values come from the plugin.
+
+launcher:
+  title: "<gold><bold>BushSMP"
+  quick-action:
+    mode: launcher
+    label: "BushSMP Menu"
+  body:
+    - "<gray>Welcome to the server menu. Choose a shop below."
+    - "<gray>Your balance: <green>{superpower_balance}</green>"
+    - "<gray>Current rank: <aqua>{superpower_rank}</aqua>"
+    - "<gray>Current power: <light_purple>{superpower_power}</light_purple>"
+  columns: 2
+  buttons:
+    - label: "<gold><bold>Rank Shop"
+      tooltip: "Browse, purchase or gift a rank"
+      actions:
+        - "[open] superpower:rankshop"
+    - label: "<light_purple><bold>Superpower Shop"
+      tooltip: "Browse the six configured superpowers"
+      actions:
+        - "[open] superpower:power_shop"
+    - label: "<yellow>Rank Benefits"
+      actions:
+        - "[open] superpower:rank_benefits"
+    - label: "<red>Close"
+      actions:
+        - "[close]"
+  exit:
+    label: "Close"
+
+rankshop:
+  title: "<gold><bold>BushSMP Rank Shop"
+  body:
+    - "<gray>Balance: <green>{superpower_balance}</green>"
+    - "<gray>Choose a rank to inspect its price and duration bonus."
+    - "<dark_gray>Names, prices and LuckPerms groups are editable sample defaults pending Dead Bush's final rank list."
+  buttons:
+    - for-each: superpower_ranks
+      label: "<yellow>{row.name} <dark_gray>- <green>{row.price}"
+      tooltip: "{row.duration} timed power duration bonus"
+      actions:
+        - "[open] superpower:rank_detail rank_id={row.id}"
+    - label: "<aqua>Gift a Rank"
+      actions:
+        - "[open] superpower:rank_gift"
+    - label: "<gray>Back"
+      actions:
+        - "[back]"
+  exit:
+    label: "Close"
+
+rank_detail:
+  title: "<gold><bold>Rank Details"
+  body:
+    - "<white>Rank: <yellow>{superpower_rank_name}"
+    - "<white>Price: <green>{superpower_rank_price}</green>"
+    - "<white>LuckPerms group: <aqua>{superpower_rank_group}"
+    - "<white>Timed power bonus: <aqua>{superpower_rank_duration}"
+    - "<white>Benefits: <gray>{superpower_rank_benefits}"
+    - "<dark_gray>Purchases are applied through LuckPerms and Vault."
+  buttons:
+    - label: "<green><bold>Continue to Purchase"
+      tooltip: "Review the rank and confirm before paying"
+      actions:
+        - "[open] superpower:rank_confirm rank_id={rank_id}"
+    - label: "<gray>Back to ranks"
+      actions:
+        - "[back]"
+  exit:
+    label: "Close"
+
+rank_confirm:
+  title: "<yellow><bold>Confirm Rank Purchase"
+  type: confirmation
+  body:
+    - "<white>You selected: <yellow>{superpower_rank_name}"
+    - "<white>Cost: <green>{superpower_rank_price}</green>"
+    - "<white>Duration bonus: <aqua>{superpower_rank_duration}"
+    - "<red>Do not confirm unless this is the rank you selected."
+  confirm:
+    label: "<green>Confirm Purchase"
+    actions:
+      - "[player] rankshop buy {rank_id}"
+      - "[close]"
+  cancel:
+    label: "<red>Cancel"
+    actions:
+      - "[back]"
+
+rank_gift:
+  title: "<aqua><bold>Gift a Rank"
+  body:
+    - "<gray>Choose an online Minecraft player and a rank to gift."
+    - "<gray>The recipient must be online for this version of the gift flow."
+  inputs:
+    - key: recipient
+      type: text
+      label: "Recipient username (online)"
+      max-length: 16
+      min-length: 3
+      required: true
+      pattern: "[A-Za-z0-9_]{3,16}"
+      error: "Enter a valid Minecraft username (3-16 letters, numbers or underscores)."
+    - key: gift_rank
+      type: options
+      label: "Rank"
+      options:
+        for-each: superpower_ranks
+  buttons:
+    - label: "<green>Review Gift"
+      actions:
+        - "[open] superpower:rank_gift_confirm rank_id={gift_rank} recipient={recipient}"
+    - label: "<gray>Back"
+      actions:
+        - "[back]"
+  exit:
+    label: "Close"
+
+rank_gift_confirm:
+  title: "<yellow><bold>Confirm Rank Gift"
+  type: confirmation
+  body:
+    - "<white>Recipient: <aqua>{recipient}"
+    - "<white>Rank: <yellow>{superpower_rank_name}"
+    - "<white>Cost: <green>{superpower_rank_price}</green>"
+    - "<red>The player must still be online when you confirm."
+  confirm:
+    label: "<green>Confirm Gift"
+    actions:
+      - "[player] rankshop gift {recipient} {rank_id}"
+      - "[close]"
+  cancel:
+    label: "<red>Cancel"
+    actions:
+      - "[back]"
+
+rank_benefits:
+  title: "<gold><bold>Rank Benefits"
+  body:
+    - "<gray>Confirmed rank benefit rule: every higher rank adds 2 seconds to timed superpower effects."
+    - "<gray>Exact additional perks have not been supplied yet, so the plugin does not invent them."
+  buttons:
+    - for-each: superpower_ranks
+      label: "<yellow>{row.name} <dark_gray>- <aqua>{row.duration}"
+      tooltip: "{row.benefits}"
+      actions:
+        - "[open] superpower:rank_detail rank_id={row.id}"
+    - label: "<gray>Back"
+      actions:
+        - "[back]"
+  exit:
+    label: "Close"
+
+power_shop:
+  title: "<light_purple><bold>Superpower Shop"
+  body:
+    - "<gray>Balance: <green>{superpower_balance}</green>"
+    - "<gray>Choose a power to review before purchasing."
+  buttons:
+    - for-each: superpower_powers
+      label: "<light_purple>{row.name} <dark_gray>- <green>{row.price}"
+      tooltip: "{row.description}"
+      actions:
+        - "[open] superpower:power_detail power_id={row.id}"
+    - label: "<gray>Back"
+      actions:
+        - "[back]"
+  exit:
+    label: "Close"
+
+power_detail:
+  title: "<light_purple><bold>Superpower Details"
+  body:
+    - "<white>Power: <light_purple>{superpower_power_name}"
+    - "<white>Price: <green>{superpower_power_price}</green>"
+    - "<gray>{superpower_power_description}"
+    - "<dark_gray>Timed effects receive your configured rank duration bonus."
+  buttons:
+    - label: "<green>Continue to Purchase"
+      actions:
+        - "[open] superpower:power_confirm power_id={power_id}"
+    - label: "<gray>Back to powers"
+      actions:
+        - "[back]"
+  exit:
+    label: "Close"
+
+power_confirm:
+  title: "<yellow><bold>Confirm Superpower Purchase"
+  type: confirmation
+  body:
+    - "<white>Power: <light_purple>{superpower_power_name}"
+    - "<white>Cost: <green>{superpower_power_price}</green>"
+  confirm:
+    label: "<green>Confirm Purchase"
+    actions:
+      - "[player] superpower buy {power_id}"
+      - "[close]"
+  cancel:
+    label: "<red>Cancel"
+    actions:
+      - "[back]"

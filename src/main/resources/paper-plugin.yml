@@ -1,15 +1,31 @@
 name: SuperpowerPlugin
-version: '1.0.0'
+version: '1.1.0'
 main: com.bushsmp.superpower.SuperpowerPlugin
-api-version: '1.21'
-description: Superpower plugin for Purpur with Paper Dialog UI and Vault economy
+api-version: '26.1.2'
+description: "Universal Paper/Purpur + PaperProxy family-network plugin. Optional modules: family routing, NeoCityFilter chat replacement, Superpowers and RankShop. Commands when enabled: /autotransfer <on|off|toggle|status>, /superpower, /superpower shop, /superpower buy <power_id>, /superpower dismiss, /superpower reload, /superpower gift <player> <rank_id>, /rankshop, /rankshop buy <rank_id>, /rankshop gift <player> <rank_id>, /rankshop benefits."
 dependencies:
   server:
     Vault:
       load: BEFORE
-      required: true
+      required: false
+      join-classpath: true
+    LuckPerms:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    CommandAPI:
+      load: BEFORE
+      required: false
       join-classpath: true
     Essentials:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    DialogEngine:
+      load: BEFORE
+      required: false
+      join-classpath: true
+    floodgate:
       load: BEFORE
       required: false
       join-classpath: true
